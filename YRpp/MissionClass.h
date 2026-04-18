@@ -92,6 +92,11 @@ public:
 	virtual int Mission_SpyPlaneApproach() R0;
 	virtual int Mission_SpyPlaneOverfly() R0;
 
+	static bool __fastcall IsRecruitableMission(Mission mission)
+	{
+		JMP_STD(0x5B36E0);
+	}
+
 	//Constructor
 	MissionClass() noexcept
 		: MissionClass(noinit_t())

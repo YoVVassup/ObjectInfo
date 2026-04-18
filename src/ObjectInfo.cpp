@@ -858,7 +858,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 					{
 						auto pType = pFoot->GetTechnoType();
 
-						for (auto name : ObjectInfoDisplay::GetList())
+						for (const auto& name : ObjectInfoDisplay::GetList())
 						{
 							bool allDisplay = false;
 							if (name == "NONEALL")
@@ -895,7 +895,27 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 								append("Location = (%d, %d)", (int)pFoot->GetMapCoords().X, (int)pFoot->GetMapCoords().Y);
 								display();
 							}
+							if (pFoot->HasAnyLink())
+							{
+								if (ObjectInfoDisplay::CanDisplay("link", name) || allDisplay)
+								{
 
+									for (auto i = 0; i < pFoot->RadioLinks.Capacity; ++i)
+									{
+										if (auto const pLink = pFoot->GetNthLink(i))
+										{
+											auto pLinkType = pLink->GetType();
+											append("Link %d: UID = %d, ID = %s, Location = (%d, %d)",
+												i,
+												(int)pLink->UniqueID,
+												pLinkType->ID,
+												(int)pLink->GetMapCoords().X, (int)pLink->GetMapCoords().Y
+											); 
+											display();
+										}
+									}
+								}
+							}
 
 							if (pFoot->BelongsToATeam())
 							{
@@ -1186,8 +1206,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 					{
 						auto pType = pBuilding->GetTechnoType();
 
-
-						for (auto name : ObjectInfoDisplay::GetList())
+						for (const auto& name : ObjectInfoDisplay::GetList())
 						{
 							bool allDisplay = false;
 							if (name == "NONEALL")
@@ -1265,6 +1284,27 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 										append(", %s", pBuilding->Occupants.GetItem(i)->Type->ID);
 									}
 									display();
+								}
+							}
+							if (pBuilding->HasAnyLink())
+							{
+								if (ObjectInfoDisplay::CanDisplay("link", name) || allDisplay)
+								{
+
+									for (auto i = 0; i < pBuilding->RadioLinks.Capacity; ++i)
+									{
+										if (auto const pLink = pBuilding->GetNthLink(i))
+										{
+											auto pLinkType = pLink->GetType();
+											append("Link %d: UID = %d, ID = %s, Location = (%d, %d)",
+												i,
+												(int)pLink->UniqueID,
+												pLinkType->ID,
+												(int)pLink->GetMapCoords().X, (int)pLink->GetMapCoords().Y
+											);
+											display();
+										}
+									}
 								}
 							}
 							if (ObjectInfoDisplay::CanDisplay("enemy", name) || allDisplay)
@@ -1391,8 +1431,6 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 								}
 							}
 						}
-
-
 
 					};
 
