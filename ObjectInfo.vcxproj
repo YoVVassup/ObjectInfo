@@ -15,12 +15,17 @@
     <ClCompile Include="src\GeneralUtils.cpp" />
     <ClCompile Include="YRpp\StaticInits.cpp" />
     <ClCompile Include="src\ObjectInfo.cpp" />
+    <ClCompile Include="src\TriggerDebug.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Common.h" />
     <ClInclude Include="src\Rules.h" />
-    <ClInclude Include="src\ToolTipManager.h" />
     <ClInclude Include="src\command.h" />
     <ClInclude Include="src\GeneralUtils.h" />
+    <ClInclude Include="src\version.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="src\ObjectInfo.rc" />
   </ItemGroup>
   <ItemGroup>
     <None Include="objectinfo.ini" />
@@ -43,6 +48,9 @@
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <PlatformToolset>v143</PlatformToolset>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>NotSet</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -57,6 +65,13 @@
     <GenerateManifest>false</GenerateManifest>
     <IncludePath>$(SolutionDir)YRpp;$(VC_IncludePath);$(WindowsSdk_IncludePath);</IncludePath>
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(Configuration)\</OutDir>
+    <IntDir>$(Configuration)\IntDir\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <GenerateManifest>false</GenerateManifest>
+    <IncludePath>$(SolutionDir)YRpp;$(VC_IncludePath);$(WindowsSdk_IncludePath);</IncludePath>
+    <LinkIncremental>true</LinkIncremental>
     <OutDir>$(Configuration)\</OutDir>
     <IntDir>$(Configuration)\IntDir\</IntDir>
   </PropertyGroup>
@@ -99,6 +114,30 @@
     <PostBuildEvent>
       <Command>copy "$(SolutionDir)objectinfo.ini" "$(OutDir)"</Command>
     </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>
+      </SDLCheck>
+      <ConformanceMode>false</ConformanceMode>
+      <DiagnosticsFormat>Caret</DiagnosticsFormat>
+      <PreprocessorDefinitions>_DEBUG;SYR_VER=2; HAS_EXCEPTIONS=0;NOMINMAX;_USING_V110_SDK71_;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <StructMemberAlignment>8Bytes</StructMemberAlignment>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions</EnableEnhancedInstructionSet>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <CallingConvention>StdCall</CallingConvention>
+      <AdditionalOptions>/Zc:twoPhase- %(AdditionalOptions)</AdditionalOptions>
+      <DisableSpecificWarnings>4100;4530;4731;4740;</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;dbghelp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

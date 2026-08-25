@@ -1,4 +1,5 @@
 <p align="center">
+  <img src="https://img.shields.io/badge/Version-0.0.2.0-green" alt="Version"/>
   <img src="https://img.shields.io/badge/C%2B%2B-20-blue?logo=cplusplus" alt="C++20"/>
   <img src="https://img.shields.io/badge/Platform-Win32-blue?logo=windows" alt="Win32"/>
   <img src="https://img.shields.io/badge/YRpp-Phobos-green" alt="YRpp"/>
@@ -27,6 +28,7 @@ ObjectInfo is a Syringe DLL plugin that adds an interactive debug overlay for in
 - **Trigger Debug Mode** — interactive UI to inspect, enable, disable, and force-execute triggers
 - **Configurable Presets** — define which fields to display via INI config
 - **Trigger Dump** — export all trigger data to `debug.log`
+- **Version Info** — DLL includes embedded Windows VERSIONINFO resource
 
 ## Installation
 
@@ -40,14 +42,18 @@ Use an external DLL injector to load `ObjectInfo.dll` into the `gamemd.exe` proc
 
 ## Configuration — objectinfo.ini
 
+The INI file contains full documentation of all available fields as comments.
+
 ### `[ObjectInfoDisplayLists]`
 
 Defines display presets. Each key is a separate preset, cycled with the "Next Info Preset" hotkey:
 
 ```ini
-[ObjectInfoDisplayLists]
-0=uiname,id,uid,hp,owner,location,target,destination,currentmission
-1=id,hp,location,team,currentscript,passenger
+; Preset 0: Full debug info
+0=uiname,id,uid,hp,owner,location,power,factory,money,occupants,enemy,upgrades,passenger,aitrigger,team,currentscript,target,destination,focus,ammo,currentmission,group,recruit,veterancy,tag,megamission,megatarget,megadestination
+; Preset 1: Minimal gameplay info
+1=id,hp,location,target,destination,focus
+; Preset 2: Name only
 2=uiname
 ```
 
@@ -69,46 +75,60 @@ Y=15
 
 Assign these in the game's keyboard options:
 
-| Command | Description |
-|---------|-------------|
-| **Display Object Info** | Toggle the object info overlay |
-| **Next Info Preset** | Cycle through display presets |
-| **Dump Trigger Info** | Export all trigger data to `debug.log` |
-| **Trigger Debug Mode** | Toggle the interactive trigger debugger |
-| **Trigger Debug Page Up** | Scroll up in the trigger list |
-| **Trigger Debug Page Down** | Scroll down in the trigger list |
+| Command | Description | Availability |
+|---------|-------------|--------------|
+| **Display Object Info** | Toggle the object info overlay | Release + Debug |
+| **Next Info Preset** | Cycle through display presets | Release + Debug |
+| **Dump Trigger Info** | Export all trigger data to `debug.log` | Release + Debug |
+| **Trigger Debug Mode** | Toggle the interactive trigger debugger | Debug only |
+| **Trigger Debug Page Up** | Scroll up in the trigger list | Debug only |
+| **Trigger Debug Page Down** | Scroll down in the trigger list | Debug only |
+
+> **Note:** Trigger Debug commands are only available in Debug builds (`_DEBUG`). This keeps the Release DLL clean for end users while providing full debugging tools for developers.
 
 ## Displayed Fields
 
-### FootClass (Infantry / Vehicles / Aircraft)
+### Basic
 
 | Field | Output Format |
 |-------|---------------|
-| `uiname` | Localized UI name |
+| `uiname` | Localized UI name (with MISSING fallback) |
 | `id` | `ID = <TypeID>` |
 | `uid` | `UID = <UniqueID>` |
 | `hp` | `HP = (current / max)` |
 | `owner` | `Owner = <ID> (<PlainName>)` |
 | `location` | `Location = (X, Y)` |
+| `group` | `Group = N` |
+| `tag` | `Tag = <ID>, InstanceCount = N` + nested triggers |
+
+### Combat
+
+| Field | Output Format |
+|-------|---------------|
+| `ammo` | `Ammo = (current / max)` |
+| `currentmission` | `Current Mission = N (name)` |
+| `veterancy` | `Veterancy = Rookie/Veteran/Elite (N.xx)` |
+| `recruit` | `RecruitA = N, RecruitB = N` |
+
+### Movement / Targeting
+
+| Field | Output Format |
+|-------|---------------|
 | `link` | `Link N: UID = .., ID = .., Location = (X, Y)` |
 | `target` | `Target = <ID>, Distance = N, Location = (X, Y)` |
 | `destination` | `Destination = <ID>, Distance = N, Location = (X, Y)` or `Destination = (X, Y)` |
 | `focus` | `Focus = <ID>, Distance = N, Location = (X, Y)` |
-| `ammo` | `Ammo = (current / max)` |
-| `currentmission` | `Current Mission = N (name)` |
 | `megamission` | `Mega Mission = N (name)` |
 | `megatarget` | `Mega Target = <ID>, Distance = N, Location = (X, Y)` |
 | `megadestination` | `Mega Destination = <ID>, Distance = N, Location = (X, Y)` |
-| `group` | `Group = N` |
-| `recruit` | `RecruitA = N, RecruitB = N` |
-| `veterancy` | `Veterancy = Rookie/Veteran/Elite (N.xx)` |
-| `tag` | `Tag = <ID>, InstanceCount = N` + nested triggers |
-| `aitrigger` | `Trigger ID = .., weights [Current, Min, Max]: .., .., ..` |
-| `team` | `Team ID = .., Script ID = .., Taskforce ID = ..` |
-| `currentscript` | Current script line or missing units |
+
+### Infantry / Vehicle
+
+| Field | Output Format |
+|-------|---------------|
 | `passenger` | `N Passengers: <ID>, <ID>, ...` |
 
-### BuildingClass
+### Building
 
 | Field | Output Format |
 |-------|---------------|
@@ -119,9 +139,17 @@ Assign these in the game's keyboard options:
 | `enemy` | `Enemy = <ID> (<Name>), AngerLevel = N` |
 | `upgrades` | `Upgrades (N / Max): Slot 1 = <ID>, Slot 2 = .., Slot 3 = ..` |
 
+### Team / AI
+
+| Field | Output Format |
+|-------|---------------|
+| `aitrigger` | `Trigger ID = .., weights [Current, Min, Max]: .., .., ..` |
+| `team` | `Team ID = .., Script ID = .., Taskforce ID = ..` |
+| `currentscript` | Current script line or missing units |
+
 ## Trigger Debug Mode
 
-Interactive UI for inspecting and controlling triggers in real-time.
+Interactive UI for inspecting and controlling triggers in real-time. **Debug builds only.**
 
 ### Display
 
@@ -203,10 +231,35 @@ Interactive UI for inspecting and controlling triggers in real-time.
 - Windows 10 SDK
 
 ```bash
+# Release build
 msbuild ObjectInfo.vcxproj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0
+
+# Debug build (includes Trigger Debug commands)
+msbuild ObjectInfo.vcxproj /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0
 ```
 
-Output: `Release\ObjectInfo.dll` + `Release\objectinfo.ini`
+Output: `Release\ObjectInfo.dll` or `Debug\ObjectInfo.dll` + `objectinfo.ini`
+
+## Project Structure
+
+```
+ObjectInfo/
+├── src/
+│   ├── ObjectInfo.cpp      # Main overlay, commands, INI loading
+│   ├── TriggerDebug.cpp    # Trigger debug UI, mouse hooks, event tracking
+│   ├── Common.h            # Shared types, globals, utilities, templates
+│   ├── Rules.h             # Display config, CanDisplay logic
+│   ├── command.h           # MakeCommand template
+│   ├── GeneralUtils.h/cpp  # String helpers (LoadStringUnlessMissing)
+│   ├── CopyProtection.cpp  # Debug-only DRM bypass hooks
+│   ├── version.h           # Version constants
+│   └── ObjectInfo.rc       # Windows VERSIONINFO resource
+├── YRpp/                   # Phobos-developers/YRpp submodule (phobos-dev)
+├── objectinfo.ini          # Runtime configuration
+├── ObjectInfo.vcxproj      # MSBuild project
+├── LICENSE                  # GPL v3
+└── Readme.md
+```
 
 ## Related Projects
 
