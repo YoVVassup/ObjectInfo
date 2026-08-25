@@ -1,4 +1,5 @@
 Release
+Debug
 *.vcxproj.user
 *.vcxproj.filters
 *.sdf
@@ -6,5 +7,19 @@ Release
 .vs
 .cproject
 .project
-
-
+*.7z
+*.rar
+*.zip
+*.pdb
+*.ilk
+*.obj
+*.log
+*.tlog
+*.idb
+*.ipdb
+*.iobj
+*.pch
+*.ilk
+*.exp
+*.lib
+IntDir

@@ -15,6 +15,18 @@
 #include <algorithm>
 #include <variant>
 
+// Compatibility: Phobos YRpp uses STACK_OFFSET (addition) instead of STACK_OFFS (subtraction)
+// STACK_OFFS(cur, wanted) = cur - wanted  (old)
+// STACK_OFFSET(cur, wanted) = cur + wanted  (Phobos)
+// So STACK_OFFS(x, y) == STACK_OFFSET(x, -y)
+#define STACK_OFFS(cur_offset, wanted_offset) STACK_OFFSET(cur_offset, -(wanted_offset))
+
+// Compatibility wrapper for Phobos YRpp's Drawing::GetTextDimensions
+static RectangleStruct GetTextDimensionsCompat(const wchar_t* text)
+{
+	return Drawing::GetTextDimensions(text, { 0, 0 }, 0);
+}
+
 #define COLOR_ALLIEDTT 0xA69F
 #define COLOR_SOVIETTT 0xFFE0
 
@@ -38,7 +50,7 @@ enum CurrentMode : int
 	Disable,
 	Destroy,
 	ChangeTimer,
-	Count
+	ModeCount
 };
 enum TriggerSort : int
 {
@@ -74,7 +86,7 @@ TriggerSort Sort = Raw;
 int ModeIndex = -1;
 int ChangedTimer = 0;
 RectangleStruct TriggerDebugRect[RECT_COUNT]{0};
-RectangleStruct TriggerDebugMode[Count]{0};
+RectangleStruct TriggerDebugMode[ModeCount]{0};
 RectangleStruct TriggerDebugPageDown{ 0 };
 RectangleStruct TriggerDebugPageUp{ 0 };
 RectangleStruct TriggerDebugDetailed{ 0 };
@@ -190,7 +202,7 @@ static void Message(const wchar_t* pFormat, ...)
 	va_list args;
 	va_start(args, pFormat);
 	vswprintf_s(FinalStringBufferW, pFormat, args);
-	MessageListClass::Instance->PrintMessage(FinalStringBufferW);
+	MessageListClass::Instance.PrintMessage(FinalStringBufferW);
 	va_end(args);
 }
 
@@ -281,15 +293,15 @@ static void SortTriggerArray(TriggerSort sortType)
 	SortedTriggerArray.clear();
 	SortedDestroyedTriggers.clear();
 	SortedAllTriggers.clear();
-	for (int i = 0; i < TriggerClass::Array->Count; i++) {
-		SortedTriggerArray.push_back(TriggerClass::Array->GetItem(i));
+	for (int i = 0; i < TriggerClass::Array.Count; i++) {
+		SortedTriggerArray.push_back(TriggerClass::Array.GetItem(i));
 	}
 
-	if (bTriggerDebugEdited && !MessageListClass::Instance->HasEditFocus() && wcscmp(SearchPattern, MessageListClass::Instance->GetEditBuffer()) != 0)
+	if (bTriggerDebugEdited && !MessageListClass::Instance.HasEditFocus() && wcscmp(SearchPattern, MessageListClass::Instance.GetEditBuffer()) != 0)
 	{
 		bTriggerDebugEdited = false;
 		CurrentPage = 0;
-		wcscpy(SearchPattern, MessageListClass::Instance->GetEditBuffer());
+		wcscpy(SearchPattern, MessageListClass::Instance.GetEditBuffer());
 	}
 	if (wcslen(SearchPattern) > 0)
 	{
@@ -372,7 +384,7 @@ public:
 		return GeneralUtils::LoadStringUnlessMissing("TXT_DISPLAY_OBJECT_INFO_DESC", L"Display objects' information along with them.");
 	}
 
-	virtual void Execute(DWORD dwUnk) const override
+	virtual void Execute(WWKey eInput) const override
 	{
 		bObjectInfo = !bObjectInfo;
 	}
@@ -401,7 +413,7 @@ public:
 		return GeneralUtils::LoadStringUnlessMissing("TXT_DISPLAY_OBJECT_INFO_NEXT_DESC", L"Change to next display object info preset.");
 	}
 
-	virtual void Execute(DWORD dwUnk) const override
+	virtual void Execute(WWKey eInput) const override
 	{
 		ObjectInfoDisplay::ChangeNextList();
 	}
@@ -430,7 +442,7 @@ public:
 		return GeneralUtils::LoadStringUnlessMissing("TXT_DUMP_TRIGGER_INFO_DESC", L"Dump Trigger Info to debug.log.");
 	}
 
-	virtual void Execute(DWORD dwUnk) const override
+	virtual void Execute(WWKey eInput) const override
 	{
 		auto DumpAllTrigger = [](TriggerClass* pTrigger) -> void {
 			if (pTrigger) {
@@ -456,10 +468,10 @@ public:
 			};
 
 		Log("[Trigger Info] ================== Array_Logic ==================\n");
-		DumpTags(TagClass::Array_Logic);
+		DumpTags(&TagClass::Array);
 		Log("[Trigger Info] ================== Array_House ==================\n");
-		for (int i = 0; i < HouseClass::Array->Count; i++) {
-			if (auto pHouse = HouseClass::Array->GetItem(i)) {
+		for (int i = 0; i < HouseClass::Array.Count; i++) {
+			if (auto pHouse = HouseClass::Array.GetItem(i)) {
 				if (pHouse->RelatedTags.Count > 0) {
 					Log("[Trigger Info] %s (%s):\n", pHouse->get_ID(), pHouse->PlainName);
 					DumpTags(&pHouse->RelatedTags);
@@ -468,7 +480,7 @@ public:
 		}
 		Log("[Trigger Info] ================== Array_Object ==================\n");
 		std::map<TagClass*, std::vector<TechnoClass*>> ObjectTags;
-		for (auto pTechno : *TechnoClass::Array) {
+		for (auto pTechno : TechnoClass::Array) {
 			if (pTechno->AttachedTag) {
 				ObjectTags[pTechno->AttachedTag].push_back(pTechno);
 			}
@@ -487,9 +499,9 @@ public:
 		}
 		Log("[Trigger Info] ================== Array_Cell ==================\n");
 		std::map<TagClass*, std::vector<CellStruct>> CellTags;
-		for (int i = 0; i < MapClass::Instance->TaggedCells.Count; i++) {
-			auto mapCoord = MapClass::Instance->TaggedCells.GetItem(i);
-			if (auto pCell = MapClass::Instance->TryGetCellAt(mapCoord)) {
+		for (int i = 0; i < MapClass::Instance.TaggedCells.Count; i++) {
+			auto mapCoord = MapClass::Instance.TaggedCells.GetItem(i);
+			if (auto pCell = MapClass::Instance.TryGetCellAt(mapCoord)) {
 				if (pCell->AttachedTag) {
 					bool add = true;
 					for (auto& mp : CellTags[pCell->AttachedTag]) {
@@ -510,8 +522,8 @@ public:
 			DumpTag(cellTag.first);
 		}
 		Log("[Trigger Info] ================== All_Triggers ==================\n");
-		for (int i = 0; i < TriggerClass::Array->Count; i++) {
-			if (auto trigger = TriggerClass::Array->GetItem(i)) {
+		for (int i = 0; i < TriggerClass::Array.Count; i++) {
+			if (auto trigger = TriggerClass::Array.GetItem(i)) {
 				DumpAllTrigger(trigger);
 			}
 		}
@@ -543,7 +555,7 @@ public:
 		return GeneralUtils::LoadStringUnlessMissing("TXT_TRIGGER_DEBUG_MODE_DESC", L"Enable Trigger Debug Mode.");
 	}
 
-	virtual void Execute(DWORD dwUnk) const override
+	virtual void Execute(WWKey eInput) const override
 	{
 		bTriggerDebug = !bTriggerDebug;
 	}
@@ -572,7 +584,7 @@ public:
 		return GeneralUtils::LoadStringUnlessMissing("TXT_TRIGGER_DEBUG_PAGEUP_DESC", L"Trigger Debug Page Up.");
 	}
 
-	virtual void Execute(DWORD dwUnk) const override
+	virtual void Execute(WWKey eInput) const override
 	{
 		if (bTriggerDebug && CurrentPage > 0)
 		{
@@ -604,7 +616,7 @@ public:
 		return GeneralUtils::LoadStringUnlessMissing("TXT_TRIGGER_DEBUG_PAGEDOWN_DESC", L"Trigger Debug Page Down.");
 	}
 
-	virtual void Execute(DWORD dwUnk) const override
+	virtual void Execute(WWKey eInput) const override
 	{
 		if (bTriggerDebug && !bTriggerDebugPageEnd)
 		{
@@ -612,7 +624,7 @@ public:
 		}
 	}
 };
-DEFINE_HOOK(533066, CommandClassCallback_Register, 6)
+DEFINE_HOOK(0x533066, CommandClassCallback_Register, 6)
 {
 	// Load it after Ares'
 
@@ -626,7 +638,7 @@ DEFINE_HOOK(533066, CommandClassCallback_Register, 6)
 	return 0;
 }
 
-DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
+DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 {
 	if (bObjectInfo)
 	{
@@ -705,9 +717,9 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 				}
 			};
 
-		for (auto pTechno : *TechnoClass::Array)
+		for (auto pTechno : TechnoClass::Array)
 		{
-			if (pTechno->unknown_bool_431 || pTechno->IsSelected)
+			if (pTechno->IsMouseHovering || pTechno->IsSelected)
 			{
 				Point2D position;
 				TacticalClass::Instance->CoordsToClient(&pTechno->GetCoords(), &position);
@@ -734,8 +746,8 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						auto h = DSurface::Composite->GetHeight();
 						auto w = DSurface::Composite->GetWidth();
 
-						auto wanted = Drawing::GetTextDimensions(string);
-						wanted.Height += 2;
+	auto wanted = GetTextDimensionsCompat(string);
+					wanted.Height += 2;
 
 						int exceedX = w - offsetX - wanted.Width;
 						if (exceedX >= 0)
@@ -748,7 +760,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						RectangleStruct rect = { offsetX + exceedX, offsetY, wanted.Width, wanted.Height };
 
 						DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-						DSurface::Composite->DrawTextA(string, rect.X, rect.Y, color);
+						DSurface::Composite->DrawText(string, rect.X, rect.Y, color);
 
 						if (opposite)
 							offsetY -= wanted.Height;
@@ -773,7 +785,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						p = wcstok(string3, d);
 						while (p)
 						{
-							auto wanted2 = Drawing::GetTextDimensions(p);
+							auto wanted2 = GetTextDimensionsCompat(p);
 							wanted.Height += wanted2.Height + 2;
 							if (wanted.Width < wanted2.Width)
 								wanted.Width = wanted2.Width;
@@ -798,8 +810,8 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						p = wcstok(string2, d);
 						while (p)
 						{
-							auto wanted2 = Drawing::GetTextDimensions(p);
-							DSurface::Composite->DrawTextA(p, rect.X, rect.Y, color);
+							auto wanted2 = GetTextDimensionsCompat(p);
+							DSurface::Composite->DrawText(p, rect.X, rect.Y, color);
 							rect.Y += wanted2.Height + 2;
 							p = wcstok(NULL, d);
 						}
@@ -924,15 +936,15 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 								if (ObjectInfoDisplay::CanDisplay("aitrigger", name) || allDisplay)
 								{
 									bool found = false;
-									for (int i = 0; i < AITriggerTypeClass::Array->Count && !found; i++)
+									for (int i = 0; i < AITriggerTypeClass::Array.Count && !found; i++)
 									{
-										auto pTriggerTeam1Type = AITriggerTypeClass::Array->GetItem(i)->Team1;
-										auto pTriggerTeam2Type = AITriggerTypeClass::Array->GetItem(i)->Team2;
+										auto pTriggerTeam1Type = AITriggerTypeClass::Array.GetItem(i)->Team1;
+										auto pTriggerTeam2Type = AITriggerTypeClass::Array.GetItem(i)->Team2;
 
 										if (pTeamType && ((pTriggerTeam1Type && pTriggerTeam1Type == pTeamType) || (pTriggerTeam2Type && pTriggerTeam2Type == pTeamType)))
 										{
 											found = true;
-											auto pTriggerType = AITriggerTypeClass::Array->GetItem(i);
+											auto pTriggerType = AITriggerTypeClass::Array.GetItem(i);
 											append("Trigger ID = %s, weights [Current, Min, Max]: %f, %f, %f", pTriggerType->ID, pTriggerType->Weight_Current, pTriggerType->Weight_Minimum, pTriggerType->Weight_Maximum);
 										}
 									}
@@ -978,18 +990,18 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 											}
 										}
 									}
-									if (pTeam->CurrentScript->idxCurrentLine >= 0)
+									if (pTeam->CurrentScript->CurrentMission >= 0)
 									{
 										ScriptActionNode sNode;
 										pTeam->CurrentScript->GetCurrentAction(&sNode);
-										append("Current Script [Line = Action, Argument]: %d = %d, %d", pTeam->CurrentScript->idxCurrentLine, sNode.Action, sNode.Argument);
+										append("Current Script [Line = Action, Argument]: %d = %d, %d", pTeam->CurrentScript->CurrentMission, sNode.Action, sNode.Argument);
 
 									}
 									else if (!missingUnit)
-										append("Current Script [Line = Action, Argument]: %d", pTeam->CurrentScript->idxCurrentLine);
+										append("Current Script [Line = Action, Argument]: %d", pTeam->CurrentScript->CurrentMission);
 									else
 									{
-										append("Team Missing: ", pTeam->CurrentScript->idxCurrentLine);
+										append("Team Missing: ", pTeam->CurrentScript->CurrentMission);
 										for (int i = 0; i < 6; ++i)
 										{
 											auto pEntry = pTeam->Type->TaskForce->Entries[i];
@@ -1077,7 +1089,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 							}
 							if (ObjectInfoDisplay::CanDisplay("focus", name) || allDisplay)
 							{
-								auto pFocus = abstract_cast<TechnoClass*>(pFoot->Focus);
+								auto pFocus = abstract_cast<TechnoClass*>(pFoot->ArchiveTarget);
 
 								if (pFocus)
 								{
@@ -1101,16 +1113,16 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 							}
 							if (ObjectInfoDisplay::CanDisplay("megamission", name) || allDisplay)
 							{
-								if (pFoot->unknown_int_5C4 > -1)
-								{
-									append("Mega Mission = %d (%s)", pFoot->unknown_int_5C4, getMissionName((int)pFoot->unknown_int_5C4));
+if ((int)pFoot->MegaMission > -1)
+							{
+								append("Mega Mission = %d (%s)", (int)pFoot->MegaMission, getMissionName((int)pFoot->MegaMission));
 									display();
 								}
 
 							}
 							if (ObjectInfoDisplay::CanDisplay("megatarget", name) || allDisplay)
 							{
-								auto megaTarget = (AbstractClass*)pFoot->unknown_5CC;
+								auto megaTarget = (AbstractClass*)pFoot->MegaTarget;
 								if (megaTarget)
 								{
 									auto mapCoords = CellStruct::Empty;
@@ -1133,7 +1145,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 							}
 							if (ObjectInfoDisplay::CanDisplay("megadestination", name) || allDisplay)
 							{
-								auto megaDestination = (AbstractClass*)pFoot->unknown_5C8;
+								auto megaDestination = (AbstractClass*)pFoot->MegaDestination;
 								auto pDestination = abstract_cast<TechnoClass*>(megaDestination);
 								if (pDestination)
 								{
@@ -1316,7 +1328,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 									int angerLevel = -1;
 									if (pHouse->EnemyHouseIndex >= 0)
 									{
-										pEnemyHouse = HouseClass::Array->GetItem(pHouse->EnemyHouseIndex);
+										pEnemyHouse = HouseClass::Array.GetItem(pHouse->EnemyHouseIndex);
 										for (auto pNode : pHouse->AngerNodes)
 										{
 											if (pNode.House == pEnemyHouse)
@@ -1462,7 +1474,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			auto w = DSurface::Composite->GetWidth();
 
 
-			auto wanted = Drawing::GetTextDimensions(string);
+			auto wanted = GetTextDimensionsCompat(string);
 			wanted.Height += 2;
 
 			if (wanted.Height + offsetY >= h - 100)
@@ -1472,7 +1484,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			TriggerDebugRect[index] = rect;
 
 			DSurface::Composite->FillRect(&rect, bkgColor);
-			DSurface::Composite->DrawTextA(string, rect.X, rect.Y, color);
+			DSurface::Composite->DrawText(string, rect.X, rect.Y, color);
 
 			offsetY += wanted.Height;
 			return true;
@@ -1487,10 +1499,10 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 		}
 		bTriggerDebugPageEnd = true;
 
-		if (bTriggerDebugTimerEdited && !MessageListClass::Instance->HasEditFocus())
+		if (bTriggerDebugTimerEdited && !MessageListClass::Instance.HasEditFocus())
 		{
 			bTriggerDebugTimerEdited = false;
-			ChangedTimer = _wtoi(MessageListClass::Instance->GetEditBuffer());
+			ChangedTimer = _wtoi(MessageListClass::Instance.GetEditBuffer());
 		}
 
 		for (int i = CurrentPage * PageTriggerCount; i < std::min((int)SortedAllTriggers.size(), (CurrentPage + 1) * PageTriggerCount); i++) {
@@ -1606,7 +1618,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 		const wchar_t* EnableChanged = L"Enable Timer-modified";
 		int upRight = 0;
 		{
-			auto wanted = Drawing::GetTextDimensions(pageUp);
+			auto wanted = GetTextDimensionsCompat(pageUp);
 			wanted.Height += 2;
 
 			RectangleStruct rect = { TriggerDebugStartX , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
@@ -1614,10 +1626,10 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			upRight = TriggerDebugStartX + wanted.Width;
 
 			DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-			DSurface::Composite->DrawTextA(pageUp, rect.X, rect.Y, COLOR_WHITE);
+			DSurface::Composite->DrawText(pageUp, rect.X, rect.Y, COLOR_WHITE);
 		}
 		{
-			auto wanted = Drawing::GetTextDimensions(pageDown);
+			auto wanted = GetTextDimensionsCompat(pageDown);
 			wanted.Height += 2;
 
 			RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
@@ -1625,10 +1637,10 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			upRight = rect.X + wanted.Width;
 
 			DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-			DSurface::Composite->DrawTextA(pageDown, rect.X, rect.Y, COLOR_WHITE);
+			DSurface::Composite->DrawText(pageDown, rect.X, rect.Y, COLOR_WHITE);
 		}
 		{
-			auto wanted = Drawing::GetTextDimensions(Detail);
+			auto wanted = GetTextDimensionsCompat(Detail);
 			wanted.Height += 2;
 
 			RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
@@ -1636,10 +1648,10 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			upRight = rect.X + wanted.Width;
 
 			DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-			DSurface::Composite->DrawTextA(Detail, rect.X, rect.Y, bTriggerDebugDetailed ? COLOR_RED : COLOR_WHITE);
+			DSurface::Composite->DrawText(Detail, rect.X, rect.Y, bTriggerDebugDetailed ? COLOR_RED : COLOR_WHITE);
 		}
 		{
-			auto wanted = Drawing::GetTextDimensions(SortType.c_str());
+			auto wanted = GetTextDimensionsCompat(SortType.c_str());
 			wanted.Height += 2;
 
 			RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
@@ -1647,10 +1659,10 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			upRight = rect.X + wanted.Width;
 
 			DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-			DSurface::Composite->DrawTextA(SortType.c_str(), rect.X, rect.Y, COLOR_WHITE);
+			DSurface::Composite->DrawText(SortType.c_str(), rect.X, rect.Y, COLOR_WHITE);
 		}
 		{
-			auto wanted = Drawing::GetTextDimensions(Search);
+			auto wanted = GetTextDimensionsCompat(Search);
 			wanted.Height += 2;
 
 			RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
@@ -1658,10 +1670,10 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			upRight = rect.X + wanted.Width;
 
 			DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-			DSurface::Composite->DrawTextA(Search, rect.X, rect.Y, COLOR_WHITE);
+			DSurface::Composite->DrawText(Search, rect.X, rect.Y, COLOR_WHITE);
 		}		
 		{
-			auto wanted = Drawing::GetTextDimensions(EnableChanged);
+			auto wanted = GetTextDimensionsCompat(EnableChanged);
 			wanted.Height += 2;
 
 			RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
@@ -1669,17 +1681,17 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			upRight = rect.X + wanted.Width;
 
 			DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-			DSurface::Composite->DrawTextA(EnableChanged, rect.X, rect.Y, COLOR_WHITE);
+			DSurface::Composite->DrawText(EnableChanged, rect.X, rect.Y, COLOR_WHITE);
 		}
 
-		const wchar_t* Modes[Count] =
+		const wchar_t* Modes[ModeCount] =
 		{
 			L"Run", L"Enable", L"Disable", L"Destroy", L"Set Timer"
 		};
-		int modesRight[Count]{ 0 };
-		for (int i = 0; i < Count; ++i)
+		int modesRight[ModeCount]{ 0 };
+		for (int i = 0; i < ModeCount; ++i)
 		{
-			auto wanted = Drawing::GetTextDimensions(Modes[i]);
+			auto wanted = GetTextDimensionsCompat(Modes[i]);
 			wanted.Height += 2;
 
 			RectangleStruct rect = { TriggerDebugStartX , TriggerDebugPageDown.Y - wanted.Height, wanted.Width, wanted.Height };
@@ -1691,7 +1703,7 @@ DEFINE_HOOK(4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 			modesRight[i] = rect.X + wanted.Width;
 
 			DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-			DSurface::Composite->DrawTextA(Modes[i], rect.X, rect.Y, (int)Mode == i ? COLOR_RED : COLOR_WHITE);
+			DSurface::Composite->DrawText(Modes[i], rect.X, rect.Y, (int)Mode == i ? COLOR_RED : COLOR_WHITE);
 		}
 	}
 
@@ -1776,7 +1788,7 @@ static void GetEventCount(TEventClass* pEvent, int& count)
 	}
 }
 
-DEFINE_HOOK(69300B, ScrollClass_MouseUpdate_SkipMouseActionUpdate, 6)
+DEFINE_HOOK(0x69300B, ScrollClass_MouseUpdate_SkipMouseActionUpdate, 6)
 {
 	if (!bTriggerDebug)
 		return 0;
@@ -1844,7 +1856,7 @@ DEFINE_HOOK(69300B, ScrollClass_MouseUpdate_SkipMouseActionUpdate, 6)
 		R->EAX(Action::None);
 		return SkipGameCode;
 	}
-	for (int i = 0; i < Count; ++i)
+	for (int i = 0; i < ModeCount; ++i)
 	{
 		if (isInRect(TriggerDebugMode[i]))
 		{
@@ -1857,7 +1869,7 @@ DEFINE_HOOK(69300B, ScrollClass_MouseUpdate_SkipMouseActionUpdate, 6)
 	return 0;
 }
 
-DEFINE_HOOK(6931A5, ScrollClass_WindowsProcedure_PressLeftMouseButton, 6)
+DEFINE_HOOK(0x6931A5, ScrollClass_WindowsProcedure_PressLeftMouseButton, 6)
 {
 	enum { SkipGameCode = 0x6931B4 };
 
@@ -1933,18 +1945,18 @@ DEFINE_HOOK(6931A5, ScrollClass_WindowsProcedure_PressLeftMouseButton, 6)
 		}
 		case -5:
 		{
-			if (!MessageListClass::Instance->HasEditFocus())
+			if (!MessageListClass::Instance.HasEditFocus())
 			{
-				MessageListClass::Instance->RemoveEdit();
-				MessageListClass::Instance->AddEdit(0, TextPrintType::BrightColor, L"");
+				MessageListClass::Instance.RemoveEdit();
+				MessageListClass::Instance.AddEdit(0, TextPrintType::BrightColor, L"");
 				bTriggerDebugEdited = true;
 			}
 			break;
 		}
 		case -6:
 		{
-			for (int i = 0; i < TriggerClass::Array->Count; i++) {
-				auto pTrigger = TriggerClass::Array->GetItem(i);
+			for (int i = 0; i < TriggerClass::Array.Count; i++) {
+				auto pTrigger = TriggerClass::Array.GetItem(i);
 				auto& ext = TriggerExtMap[pTrigger];
 				if (ext.ResetTimer > -1)
 				{
@@ -1967,10 +1979,10 @@ DEFINE_HOOK(6931A5, ScrollClass_WindowsProcedure_PressLeftMouseButton, 6)
 	{
 		Mode = CurrentMode(ModeIndex);
 		bPressedInButtonsLayer = true;
-		if (Mode == ChangeTimer && !MessageListClass::Instance->HasEditFocus())
+		if (Mode == ChangeTimer && !MessageListClass::Instance.HasEditFocus())
 		{
-			MessageListClass::Instance->RemoveEdit();
-			MessageListClass::Instance->AddEdit(0, TextPrintType::BrightColor, L"");
+			MessageListClass::Instance.RemoveEdit();
+			MessageListClass::Instance.AddEdit(0, TextPrintType::BrightColor, L"");
 			bTriggerDebugTimerEdited = true;
 		}
 		R->Stack(STACK_OFFS(0x28, 0x8), 0);
@@ -1980,7 +1992,7 @@ DEFINE_HOOK(6931A5, ScrollClass_WindowsProcedure_PressLeftMouseButton, 6)
 	return SkipGameCode;
 }
 
-DEFINE_HOOK(693268, ScrollClass_WindowsProcedure_ReleaseLeftMouseButton, 5)
+DEFINE_HOOK(0x693268, ScrollClass_WindowsProcedure_ReleaseLeftMouseButton, 5)
 {
 	enum { SkipGameCode = 0x693276 };
 
@@ -1995,17 +2007,17 @@ DEFINE_HOOK(693268, ScrollClass_WindowsProcedure_ReleaseLeftMouseButton, 5)
 	return 0;
 }
 
-DEFINE_HOOK(692F85, ScrollClass_MouseUpdate_SkipMouseLongPress, 7)
+DEFINE_HOOK(0x692F85, ScrollClass_MouseUpdate_SkipMouseLongPress, 7)
 {
 	enum { CheckMousePress = 0x692F8E, CheckMouseNoPress = 0x692FDC };
 
 	GET(ScrollClass*, pThis, EBX);
 
-	// 555A: AnyMouseButtonDown
+	// 554A: AnyMouseButtonDown
 	return (pThis->unknown_byte_554A && !bPressedInButtonsLayer) ? CheckMousePress : CheckMouseNoPress;
 }
 
-DEFINE_HOOK(6851F0, Logic_Init, 5)
+DEFINE_HOOK(0x6851F0, Logic_Init, 5)
 {
 	CurrentPage = 0;
 	TriggerExtMap.clear();
@@ -2014,7 +2026,7 @@ DEFINE_HOOK(6851F0, Logic_Init, 5)
 	return 0;
 }
 
-DEFINE_HOOK(7265D1, TriggerClass_FireActions, 5)
+DEFINE_HOOK(0x7265D1, TriggerClass_FireActions, 5)
 {
 	GET(TriggerClass*, pTrigger, EDI);
 	TriggerExtMap[pTrigger].LastExecutedFrame = Unsorted::CurrentFrame;
@@ -2022,7 +2034,7 @@ DEFINE_HOOK(7265D1, TriggerClass_FireActions, 5)
 	return 0;
 }
 
-DEFINE_HOOK(7264C0, TriggerClass_RegisterEvent_Clear, 7)
+DEFINE_HOOK(0x7264C0, TriggerClass_RegisterEvent_Clear, 7)
 {
 	GET(TriggerClass*, pThis, ECX);
 	TriggerExtMap[pThis].OccuredEvents.clear();
@@ -2036,14 +2048,14 @@ DEFINE_HOOK(7264C0, TriggerClass_RegisterEvent_Clear, 7)
 	return 0;
 }
 
-DEFINE_HOOK(726564, TriggerClass_RegisterEvent_Record, 6)
+DEFINE_HOOK(0x726564, TriggerClass_RegisterEvent_Record, 6)
 {
 	GET(TriggerClass*, pThis, ESI);
 	TriggerExtMap[pThis].OccuredEvents[(int)log2(R->EBP())] = true;
 	return 0;
 }
 
-DEFINE_HOOK(726720, TriggerClass_Destroy, 7)
+DEFINE_HOOK(0x726720, TriggerClass_Destroy, 7)
 {
 	GET(TriggerClass*, pThis, ECX);
 	auto& destroyed = DestroyedTriggers.emplace_back(TriggerExtMap[pThis]);
