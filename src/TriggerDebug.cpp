@@ -1,8 +1,8 @@
 #include "Common.h"
 #include <WWMouseClass.h>
 
-const int TriggerDebugStartX = 10;
-const int TriggerDebugStartY = 180;
+int TriggerDebugStartX = 10;
+int TriggerDebugStartY = 180;
 int HoveredTriggerIndex = -100;
 int PageTriggerCount = RECT_COUNT;
 int CurrentPage = 0;
@@ -286,8 +286,6 @@ void TriggerInfoClass::Execute(WWKey eInput) const
 	Message(L"Trigger Info Dumped");
 }
 
-#ifdef _DEBUG
-
 void TriggerDebugClass::Execute(WWKey eInput) const
 {
 	bTriggerDebug = !bTriggerDebug;
@@ -308,8 +306,6 @@ void TriggerDebugPageDownClass::Execute(WWKey eInput) const
 		CurrentPage++;
 	}
 }
-
-#endif // _DEBUG
 
 static void ProcessActions(TActionClass* pAction, TriggerClass* pTrigger, int counter)
 {
@@ -381,12 +377,12 @@ void ProcessTriggers(TriggerClass* pTrigger)
 
 void DrawTriggerDebug()
 {
-	auto DrawText = [](const wchar_t* string, int& offsetX, int& offsetY, int color, int index, int bkgColor) {
+	auto DrawText = [](const wchar_t* string, int& offsetX, int& offsetY, int color, int index) {
 
 		auto h = DSurface::Composite->GetHeight();
 
 		auto wanted = GetTextDimensionsCompat(string);
-		wanted.Height += 2;
+		wanted.Height = 14;
 
 		if (wanted.Height + offsetY >= h - 100)
 			return false;
@@ -394,8 +390,7 @@ void DrawTriggerDebug()
 		RectangleStruct rect = { offsetX , offsetY, wanted.Width, wanted.Height };
 		TriggerDebugRect[index] = rect;
 
-		DSurface::Composite->FillRect(&rect, bkgColor);
-		DSurface::Composite->DrawText(string, rect.X, rect.Y, color);
+		DrawTextOutline(string, rect.X, rect.Y, color);
 
 		offsetY += wanted.Height;
 		return true;
@@ -486,8 +481,21 @@ void DrawTriggerDebug()
 		}
 
 		auto wtext = A2W(text.c_str());
+		int textColor;
+		if (!std::holds_alternative<TriggerClass**>(obj.item))
+		{
+			textColor = RGB8882RGB565(200, 60, 60);
+		}
+		else if (enabled)
+		{
+			textColor = RGB8882RGB565(0, 180, 0);
+		}
+		else
+		{
+			textColor = RGB8882RGB565(140, 140, 140);
+		}
 		if (!DrawText(wtext.c_str(),
-			DisplayX, DisplayY, COLOR_WHITE, i - CurrentPage * PageTriggerCount, enabled ? RGB8882RGB565(0, 120, 0) : COLOR_BLACK))
+			DisplayX, DisplayY, textColor, i - CurrentPage * PageTriggerCount))
 		{
 			if (PageTriggerCount == RECT_COUNT)
 				PageTriggerCount = i - CurrentPage * PageTriggerCount;
@@ -529,71 +537,72 @@ void DrawTriggerDebug()
 	const wchar_t* Search = L"Search";
 	const wchar_t* EnableChanged = L"Enable Timer-modified";
 	int upRight = 0;
+
 	{
 		auto wanted = GetTextDimensionsCompat(pageUp);
-		wanted.Height += 2;
+		wanted.Height = 14;
 
 		RectangleStruct rect = { TriggerDebugStartX , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
 		TriggerDebugPageUp = rect;
 		upRight = TriggerDebugStartX + wanted.Width;
 
-		DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-		DSurface::Composite->DrawText(pageUp, rect.X, rect.Y, COLOR_WHITE);
+		// DrawBtn removed - text only with outline
+		DrawTextOutline(pageUp, rect.X, rect.Y, COLOR_WHITE);
 	}
 	{
 		auto wanted = GetTextDimensionsCompat(pageDown);
-		wanted.Height += 2;
+		wanted.Height = 14;
 
 		RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
 		TriggerDebugPageDown = rect;
 		upRight = rect.X + wanted.Width;
 
-		DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-		DSurface::Composite->DrawText(pageDown, rect.X, rect.Y, COLOR_WHITE);
+		// DrawBtn removed - text only with outline
+		DrawTextOutline(pageDown, rect.X, rect.Y, COLOR_WHITE);
 	}
 	{
 		auto wanted = GetTextDimensionsCompat(Detail);
-		wanted.Height += 2;
+		wanted.Height = 14;
 
 		RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
 		TriggerDebugDetailed = rect;
 		upRight = rect.X + wanted.Width;
 
-		DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-		DSurface::Composite->DrawText(Detail, rect.X, rect.Y, bTriggerDebugDetailed ? COLOR_RED : COLOR_WHITE);
+		// DrawBtn removed - text only with outline
+		DrawTextOutline(Detail, rect.X, rect.Y, bTriggerDebugDetailed ? COLOR_RED : COLOR_WHITE);
 	}
 	{
 		auto wanted = GetTextDimensionsCompat(SortType.c_str());
-		wanted.Height += 2;
+		wanted.Height = 14;
 
 		RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
 		TriggerDebugSort = rect;
 		upRight = rect.X + wanted.Width;
 
-		DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-		DSurface::Composite->DrawText(SortType.c_str(), rect.X, rect.Y, COLOR_WHITE);
+		// DrawBtn removed - text only with outline
+		DrawTextOutline(SortType.c_str(), rect.X, rect.Y, COLOR_WHITE);
 	}
 	{
 		auto wanted = GetTextDimensionsCompat(Search);
-		wanted.Height += 2;
+		wanted.Height = 14;
 
 		RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
 		TriggerDebugSearch = rect;
 		upRight = rect.X + wanted.Width;
 
-		DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-		DSurface::Composite->DrawText(Search, rect.X, rect.Y, COLOR_WHITE);
+		// DrawBtn removed - text only with outline
+		DrawTextOutline(Search, rect.X, rect.Y, COLOR_WHITE);
 	}
 	{
 		auto wanted = GetTextDimensionsCompat(EnableChanged);
-		wanted.Height += 2;
+		wanted.Height = 14;
 
 		RectangleStruct rect = { upRight + 10 , TriggerDebugStartY - wanted.Height, wanted.Width, wanted.Height };
 		TriggerDebugEnableModified = rect;
 		upRight = rect.X + wanted.Width;
 
-		DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-		DSurface::Composite->DrawText(EnableChanged, rect.X, rect.Y, COLOR_WHITE);
+		// DrawBtn removed - text only with outline
+		DrawTextOutline(EnableChanged, rect.X, rect.Y, COLOR_WHITE);
 	}
 
 	const wchar_t* Modes[ModeCount] =
@@ -604,7 +613,7 @@ void DrawTriggerDebug()
 	for (int i = 0; i < ModeCount; ++i)
 	{
 		auto wanted = GetTextDimensionsCompat(Modes[i]);
-		wanted.Height += 2;
+		wanted.Height = 14;
 
 		RectangleStruct rect = { TriggerDebugStartX , TriggerDebugPageDown.Y - wanted.Height, wanted.Width, wanted.Height };
 		if (i > 0)
@@ -614,18 +623,22 @@ void DrawTriggerDebug()
 		TriggerDebugMode[i] = rect;
 		modesRight[i] = rect.X + wanted.Width;
 
-		DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-		DSurface::Composite->DrawText(Modes[i], rect.X, rect.Y, (int)Mode == i ? COLOR_RED : COLOR_WHITE);
+		// DrawBtn removed - text only with outline
+		DrawTextOutline(Modes[i], rect.X, rect.Y, (int)Mode == i ? COLOR_RED : COLOR_WHITE);
 	}
 }
 
 DEFINE_HOOK(0x69300B, ScrollClass_MouseUpdate_SkipMouseActionUpdate, 6)
 {
-	if (!bTriggerDebug)
+	if (!bTriggerDebug && !bAITriggerDebug)
 		return 0;
 
 	enum { SkipGameCode = 0x69301A };
 	const Point2D mousePosition = WWMouseClass::Instance->XY1;
+
+	// Handle numpad +/- for weight adjustment
+	if (bAITriggerDebug)
+		HandleAITriggerDebugNumpad();
 
 	auto isInRect = [&](const RectangleStruct& rect)
 		{
@@ -633,70 +646,110 @@ DEFINE_HOOK(0x69300B, ScrollClass_MouseUpdate_SkipMouseActionUpdate, 6)
 				rect.Y <= mousePosition.Y && mousePosition.Y <= rect.Y + rect.Height;
 		};
 
-	HoveredTriggerIndex = -100;
-	ModeIndex = -1;
-	for (int i = 0; i < PageTriggerCount; ++i)
+	if (bTriggerDebug)
 	{
-		if (isInRect(TriggerDebugRect[i]))
+		HoveredTriggerIndex = -100;
+		ModeIndex = -1;
+		for (int i = 0; i < PageTriggerCount; ++i)
 		{
-			HoveredTriggerIndex = i + CurrentPage * PageTriggerCount;
+			if (isInRect(TriggerDebugRect[i]))
+			{
+				HoveredTriggerIndex = i + CurrentPage * PageTriggerCount;
+				R->Stack(STACK_OFFS(0x30, -0x24), 0);
+				R->EAX(Action::None);
+				return SkipGameCode;
+			}
+		}
+		if (isInRect(TriggerDebugPageUp))
+		{
+			HoveredTriggerIndex = -1;
+			R->Stack(STACK_OFFS(0x30, -0x24), 0);
+			R->EAX(Action::None);
+			return SkipGameCode;
+		}
+		if (isInRect(TriggerDebugPageDown))
+		{
+			HoveredTriggerIndex = -2;
+			R->Stack(STACK_OFFS(0x30, -0x24), 0);
+			R->EAX(Action::None);
+			return SkipGameCode;
+		}
+		if (isInRect(TriggerDebugDetailed))
+		{
+			HoveredTriggerIndex = -3;
+			R->Stack(STACK_OFFS(0x30, -0x24), 0);
+			R->EAX(Action::None);
+			return SkipGameCode;
+		}
+		if (isInRect(TriggerDebugSort))
+		{
+			HoveredTriggerIndex = -4;
+			R->Stack(STACK_OFFS(0x30, -0x24), 0);
+			R->EAX(Action::None);
+			return SkipGameCode;
+		}
+		if (isInRect(TriggerDebugSearch))
+		{
+			HoveredTriggerIndex = -5;
+			R->Stack(STACK_OFFS(0x30, -0x24), 0);
+			R->EAX(Action::None);
+			return SkipGameCode;
+		}
+		if (isInRect(TriggerDebugEnableModified))
+		{
+			HoveredTriggerIndex = -6;
+			R->Stack(STACK_OFFS(0x30, -0x24), 0);
+			R->EAX(Action::None);
+			return SkipGameCode;
+		}
+		for (int i = 0; i < ModeCount; ++i)
+		{
+			if (isInRect(TriggerDebugMode[i]))
+			{
+				ModeIndex = i;
+				R->Stack(STACK_OFFS(0x30, -0x24), 0);
+				R->EAX(Action::None);
+				return SkipGameCode;
+			}
+		}
+	}
+
+	if (bAITriggerDebug)
+	{
+		AITriggerDebugHoveredIndex = -100;
+		for (int i = 0; i < AITriggerDebugPageItemCount; ++i)
+		{
+			if (isInRect(AITriggerDebugRect[i]))
+			{
+				AITriggerDebugHoveredIndex = i;
+				R->Stack(STACK_OFFS(0x30, -0x24), 0);
+				R->EAX(Action::None);
+				return SkipGameCode;
+			}
+		}
+		if (isInRect(AITriggerDebugPageUp))
+		{
+			AITriggerDebugHoveredIndex = -1;
+			R->Stack(STACK_OFFS(0x30, -0x24), 0);
+			R->EAX(Action::None);
+			return SkipGameCode;
+		}
+		if (isInRect(AITriggerDebugPageDown))
+		{
+			AITriggerDebugHoveredIndex = -2;
+			R->Stack(STACK_OFFS(0x30, -0x24), 0);
+			R->EAX(Action::None);
+			return SkipGameCode;
+		}
+		if (isInRect(AITriggerDebugHouseLeft))
+		{
+			AITriggerDebugHoveredIndex = -3;
 			R->Stack(STACK_OFFS(0x30, -0x24), 0);
 			R->EAX(Action::None);
 			return SkipGameCode;
 		}
 	}
-	if (isInRect(TriggerDebugPageUp))
-	{
-		HoveredTriggerIndex = -1;
-		R->Stack(STACK_OFFS(0x30, -0x24), 0);
-		R->EAX(Action::None);
-		return SkipGameCode;
-	}
-	if (isInRect(TriggerDebugPageDown))
-	{
-		HoveredTriggerIndex = -2;
-		R->Stack(STACK_OFFS(0x30, -0x24), 0);
-		R->EAX(Action::None);
-		return SkipGameCode;
-	}
-	if (isInRect(TriggerDebugDetailed))
-	{
-		HoveredTriggerIndex = -3;
-		R->Stack(STACK_OFFS(0x30, -0x24), 0);
-		R->EAX(Action::None);
-		return SkipGameCode;
-	}
-	if (isInRect(TriggerDebugSort))
-	{
-		HoveredTriggerIndex = -4;
-		R->Stack(STACK_OFFS(0x30, -0x24), 0);
-		R->EAX(Action::None);
-		return SkipGameCode;
-	}
-	if (isInRect(TriggerDebugSearch))
-	{
-		HoveredTriggerIndex = -5;
-		R->Stack(STACK_OFFS(0x30, -0x24), 0);
-		R->EAX(Action::None);
-		return SkipGameCode;
-	}
-	if (isInRect(TriggerDebugEnableModified))
-	{
-		HoveredTriggerIndex = -6;
-		R->Stack(STACK_OFFS(0x30, -0x24), 0);
-		R->EAX(Action::None);
-		return SkipGameCode;
-	}
-	for (int i = 0; i < ModeCount; ++i)
-	{
-		if (isInRect(TriggerDebugMode[i]))
-		{
-			ModeIndex = i;
-			R->Stack(STACK_OFFS(0x30, -0x24), 0);
-			R->EAX(Action::None);
-			return SkipGameCode;
-		}
-	}
+
 	return 0;
 }
 
@@ -704,122 +757,133 @@ DEFINE_HOOK(0x6931A5, ScrollClass_WindowsProcedure_PressLeftMouseButton, 6)
 {
 	enum { SkipGameCode = 0x6931B4 };
 
-	if (!bTriggerDebug)
-		return 0;
-
-	if (HoveredTriggerIndex >= 0)
+	if (bTriggerDebug)
 	{
-		if (HoveredTriggerIndex < (int)SortedAllTriggers.size())
+		if (HoveredTriggerIndex >= 0)
 		{
-			auto& obj = SortedAllTriggers[HoveredTriggerIndex];
-			if (std::holds_alternative<TriggerClass**>(obj.item))
+			if (HoveredTriggerIndex < (int)SortedAllTriggers.size())
 			{
-				ProcessTriggers(*std::get<TriggerClass**>(obj.item));
-			}
-			else
-			{
-				auto& ext = *std::get<TriggerClassExt*>(obj.item);
-				if (ext.Type)
+				auto& obj = SortedAllTriggers[HoveredTriggerIndex];
+				if (std::holds_alternative<TriggerClass**>(obj.item))
 				{
-					switch (Mode)
+					ProcessTriggers(*std::get<TriggerClass**>(obj.item));
+				}
+				else
+				{
+					auto& ext = *std::get<TriggerClassExt*>(obj.item);
+					if (ext.Type)
 					{
-					case ForceRun:
-					{
-						auto newTrigger = TriggerClass::GetInstance(ext.Type);
-						if (newTrigger)
+						switch (Mode)
 						{
-							ProcessTriggers(newTrigger);
-							newTrigger->Destroy();
+						case ForceRun:
+						{
+							auto newTrigger = TriggerClass::GetInstance(ext.Type);
+							if (newTrigger)
+							{
+								ProcessTriggers(newTrigger);
+								newTrigger->Destroy();
+							}
+							break;
 						}
-						break;
-					}
-					case Enable:
-					case Disable:
-					case Destroy:
-					case ChangeTimer:
-					default:
-						break;
+						case Enable:
+						case Disable:
+						case Destroy:
+						case ChangeTimer:
+						default:
+							break;
+						}
 					}
 				}
 			}
 		}
-	}
-	else if (HoveredTriggerIndex > -100)
-	{
-		switch (HoveredTriggerIndex)
+		else if (HoveredTriggerIndex > -100)
 		{
-		case -1:
-		{
-			if (CurrentPage > 0)
+			switch (HoveredTriggerIndex)
 			{
-				CurrentPage--;
-			}
-			break;
-		}
-		case -2:
-		{
-			if (!bTriggerDebugPageEnd)
+			case -1:
 			{
-				CurrentPage++;
+				if (CurrentPage > 0)
+				{
+					CurrentPage--;
+				}
+				break;
 			}
-			break;
+			case -2:
+			{
+				if (!bTriggerDebugPageEnd)
+				{
+					CurrentPage++;
+				}
+				break;
+			}
+			case -3:
+			{
+				bTriggerDebugDetailed = !bTriggerDebugDetailed;
+				break;
+			}
+			case -4:
+			{
+				Sort = TriggerSort(Sort + 1);
+				if (Sort == end)
+					Sort = Raw;
+				break;
+			}
+			case -5:
+			{
+				if (!MessageListClass::Instance.HasEditFocus())
+				{
+					MessageListClass::Instance.RemoveEdit();
+					MessageListClass::Instance.AddEdit(0, TextPrintType::BrightColor, L"");
+					bTriggerDebugEdited = true;
+				}
+				break;
+			}
+			case -6:
+			{
+				for (int i = 0; i < TriggerClass::Array.Count; i++) {
+					auto pTrigger = TriggerClass::Array.GetItem(i);
+					auto& ext = TriggerExtMap[pTrigger];
+					if (ext.ResetTimer > -1)
+					{
+						pTrigger->Enable();
+						pTrigger->Timer.TimeLeft = ext.ResetTimer;
+						ext.ResetTimer = -1;
+					}
+				}
+				Message(L"Enabled all triggers with modified timer");
+				break;
+			}
+			default:
+				break;
+			}
+			bPressedInButtonsLayer = true;
+			R->Stack(STACK_OFFS(0x28, 0x8), 0);
+			R->EAX(Action::None);
 		}
-		case -3:
+		else if (ModeIndex > -1)
 		{
-			bTriggerDebugDetailed = !bTriggerDebugDetailed;
-			break;
-		}
-		case -4:
-		{
-			Sort = TriggerSort(Sort + 1);
-			if (Sort == end)
-				Sort = Raw;
-			break;
-		}
-		case -5:
-		{
-			if (!MessageListClass::Instance.HasEditFocus())
+			Mode = CurrentMode(ModeIndex);
+			bPressedInButtonsLayer = true;
+			if (Mode == ChangeTimer && !MessageListClass::Instance.HasEditFocus())
 			{
 				MessageListClass::Instance.RemoveEdit();
 				MessageListClass::Instance.AddEdit(0, TextPrintType::BrightColor, L"");
-				bTriggerDebugEdited = true;
+				bTriggerDebugTimerEdited = true;
 			}
-			break;
+			R->Stack(STACK_OFFS(0x28, 0x8), 0);
+			R->EAX(Action::None);
 		}
-		case -6:
-		{
-			for (int i = 0; i < TriggerClass::Array.Count; i++) {
-				auto pTrigger = TriggerClass::Array.GetItem(i);
-				auto& ext = TriggerExtMap[pTrigger];
-				if (ext.ResetTimer > -1)
-				{
-					pTrigger->Enable();
-					pTrigger->Timer.TimeLeft = ext.ResetTimer;
-					ext.ResetTimer = -1;
-				}
-			}
-			Message(L"Enabled all triggers with modified timer");
-			break;
-		}
-		default:
-			break;
-		}
-		bPressedInButtonsLayer = true;
-		R->Stack(STACK_OFFS(0x28, 0x8), 0);
-		R->EAX(Action::None);
 	}
-	else if (ModeIndex > -1)
+
+	if (bAITriggerDebug)
 	{
-		Mode = CurrentMode(ModeIndex);
-		bPressedInButtonsLayer = true;
-		if (Mode == ChangeTimer && !MessageListClass::Instance.HasEditFocus())
+		if (AITriggerDebugHoveredIndex != -100)
 		{
-			MessageListClass::Instance.RemoveEdit();
-			MessageListClass::Instance.AddEdit(0, TextPrintType::BrightColor, L"");
-			bTriggerDebugTimerEdited = true;
+			HandleAITriggerDebugClick();
+			bPressedInButtonsLayer = true;
+			R->Stack(STACK_OFFS(0x28, 0x8), 0);
+			R->EAX(Action::None);
 		}
-		R->Stack(STACK_OFFS(0x28, 0x8), 0);
-		R->EAX(Action::None);
 	}
 
 	return SkipGameCode;

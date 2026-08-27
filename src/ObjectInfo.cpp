@@ -114,11 +114,12 @@ DEFINE_HOOK(0x533066, CommandClassCallback_Register, 6)
 	MakeCommand<ObjectInfoClass>();
 	MakeCommand<ObjectInfoChangeClass>();
 	MakeCommand<TriggerInfoClass>();
-#ifdef _DEBUG
 	MakeCommand<TriggerDebugClass>();
 	MakeCommand<TriggerDebugPageUpClass>();
 	MakeCommand<TriggerDebugPageDownClass>();
-#endif
+	MakeCommand<AITriggerDebugClass>();
+	MakeCommand<AITriggerDebugPageUpClass>();
+	MakeCommand<AITriggerDebugPageDownClass>();
 
 	return 0;
 }
@@ -153,6 +154,12 @@ DEFINE_HOOK(0x5FACDF, _Options_LoadFromINI, 5)
 	ObjectInfoDisplay::DisplayOffsetX = pINI->ReadInteger("ObjectInfoDisplayOffset", "X", 0);
 	ObjectInfoDisplay::DisplayOffsetY = pINI->ReadInteger("ObjectInfoDisplayOffset", "Y", 0);
 
+	TriggerDebugStartX = pINI->ReadInteger("TriggerDebugPosition", "X", TriggerDebugStartX);
+	TriggerDebugStartY = pINI->ReadInteger("TriggerDebugPosition", "Y", TriggerDebugStartY);
+
+	AITriggerDebugStartX = pINI->ReadInteger("AITriggerDebugPosition", "X", AITriggerDebugStartX);
+	AITriggerDebugStartY = pINI->ReadInteger("AITriggerDebugPosition", "Y", AITriggerDebugStartY);
+
 	CloseConfig(pINI);
 	return 0;
 }
@@ -173,13 +180,13 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 				bool opposite = false;
 				bool draw = true;
 
-				if (DSurface::Composite->GetHeight() - position.Y < 150)
+				if (DSurface::Composite->GetHeight() - position.Y < SCREEN_BOTTOM_THRESHOLD)
 				{
 					opposite = true;
 					offsetY = position.Y - 30;
 				}
-				if ((position.X < -80 || position.X > DSurface::Composite->GetWidth() + 80)
-					|| (position.Y < -80 || position.Y > DSurface::Composite->GetHeight() + 80))
+				if ((position.X < -SCREEN_EDGE_MARGIN || position.X > DSurface::Composite->GetWidth() + SCREEN_EDGE_MARGIN)
+					|| (position.Y < -SCREEN_EDGE_MARGIN || position.Y > DSurface::Composite->GetHeight() + SCREEN_EDGE_MARGIN))
 					draw = false;
 
 				char displayBuffer[0x800] = { 0 };
@@ -191,7 +198,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						auto w = DSurface::Composite->GetWidth();
 
 						auto wanted = GetTextDimensionsCompat(string);
-						wanted.Height += 2;
+						wanted.Height = 14;
 
 						int exceedX = w - offsetX - wanted.Width;
 						if (exceedX >= 0)
@@ -199,8 +206,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 
 						RectangleStruct rect = { offsetX + exceedX, offsetY, wanted.Width, wanted.Height };
 
-						DSurface::Composite->FillRect(&rect, COLOR_BLACK);
-						DSurface::Composite->DrawText(string, rect.X, rect.Y, color);
+						DrawTextOutline(string, rect.X, rect.Y, color);
 
 						if (opposite)
 							offsetY -= wanted.Height;
@@ -238,20 +244,15 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 							exceedX = 0;
 
 						RectangleStruct rect = { offsetX + exceedX + 4, offsetY , wanted.Width, wanted.Height };
-						RectangleStruct rectBack = { rect.X - 3, rect.Y - 1, rect.Width + 6, rect.Height + 2 };
-						RectangleStruct rectLine = { rectBack.X - 1, rectBack.Y - 1, rectBack.Width + 2, rectBack.Height + 2 };
-
-						DSurface::Composite->FillRect(&rectLine, color);
-						DSurface::Composite->FillRect(&rectBack, COLOR_BLACK);
 
 						for (const auto& line : lines)
 						{
 							auto wanted2 = GetTextDimensionsCompat(line.c_str());
-							DSurface::Composite->DrawText(line.c_str(), rect.X, rect.Y, color);
+							DrawTextOutline(line.c_str(), rect.X, rect.Y, color);
 							rect.Y += wanted2.Height + 2;
 						}
 
-						wanted.Height += 2;
+						wanted.Height = 14;
 
 						if (opposite)
 							offsetY -= wanted.Height;
@@ -271,8 +272,8 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 					};
 				auto display = [&displayBuffer, &DrawText, &offsetX, &offsetY]()
 					{
-						wchar_t bufferW[0x100] = { 0 };
-						mbstowcs(bufferW, displayBuffer, strlen(displayBuffer) + 1);
+						wchar_t bufferW[0x800] = { 0 };
+						mbstowcs(bufferW, displayBuffer, 0x7FF);
 						DrawText(bufferW, offsetX, offsetY, COLOR_WHITE);
 
 						displayBuffer[0] = 0;
@@ -333,7 +334,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 								if (pTeam->Type && pTeam->Type->TaskForce && pTeam->CurrentScript)
 								{
 									bool missingUnit = false;
-									for (int i = 0; i < 6; ++i)
+									for (int i = 0; i < TASKFORCE_MAX_ENTRIES; ++i)
 									{
 										auto pEntry = pTeam->Type->TaskForce->Entries[i];
 										if (pEntry.Type && pEntry.Amount > 0)
@@ -374,7 +375,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 									else
 									{
 										append("Team Missing: %d", pTeam->CurrentScript->CurrentMission);
-										for (int i = 0; i < 6; ++i)
+										for (int i = 0; i < TASKFORCE_MAX_ENTRIES; ++i)
 										{
 											auto pEntry = pTeam->Type->TaskForce->Entries[i];
 											if (pEntry.Type && pEntry.Amount > 0)
@@ -655,6 +656,11 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 	if (bTriggerDebug)
 	{
 		DrawTriggerDebug();
+	}
+
+	if (bAITriggerDebug)
+	{
+		DrawAITriggerDebug();
 	}
 
 	return 0;

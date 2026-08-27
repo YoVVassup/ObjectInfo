@@ -13,6 +13,7 @@
   <ItemGroup>
     <ClCompile Include="src\CopyProtection.cpp" />
     <ClCompile Include="src\GeneralUtils.cpp" />
+    <ClCompile Include="src\AITriggerDebug.cpp" />
     <ClCompile Include="YRpp\StaticInits.cpp" />
     <ClCompile Include="src\ObjectInfo.cpp" />
     <ClCompile Include="src\TriggerDebug.cpp" />

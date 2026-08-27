@@ -4,6 +4,8 @@
 #include <Helpers/Macro.h>
 #include <TagTypeClass.h>
 #include <TriggerTypeClass.h>
+#include <AITriggerTypeClass.h>
+#include <HouseClass.h>
 #include "GeneralUtils.h"
 #include "Rules.h"
 #include "command.h"
@@ -16,9 +18,23 @@
 #include <variant>
 #include <vector>
 
+inline void DrawTextOutline(const wchar_t* text, int x, int y, int color)
+{
+	static constexpr int offsets[][2] = {
+		{-2,0},{2,0},{0,-2},{0,2},{-2,-2},{2,-2},{-2,2},{2,2},
+		{-1,-2},{0,-2},{1,-2},{-2,-1},{2,-1},{-2,1},{2,1},{-1,2},{0,2},{1,2}
+	};
+	for (auto& off : offsets)
+		DSurface::Composite->DrawText(text, x + off[0], y + off[1], COLOR_BLACK);
+	DSurface::Composite->DrawText(text, x, y, color);
+}
+
 #define STACK_OFFS(cur_offset, wanted_offset) STACK_OFFSET(cur_offset, -(wanted_offset))
 
 #define RECT_COUNT 256
+#define TASKFORCE_MAX_ENTRIES 6
+#define SCREEN_EDGE_MARGIN 80
+#define SCREEN_BOTTOM_THRESHOLD 150
 
 enum CurrentMode : int
 {
@@ -65,8 +81,10 @@ extern char FinalStringBuffer[0x1000];
 extern wchar_t FinalStringBufferW[0x1000];
 extern wchar_t SearchPattern[0x200];
 
-extern const int TriggerDebugStartX;
-extern const int TriggerDebugStartY;
+extern int TriggerDebugStartX;
+extern int TriggerDebugStartY;
+extern int AITriggerDebugStartX;
+extern int AITriggerDebugStartY;
 extern int HoveredTriggerIndex;
 extern int PageTriggerCount;
 extern int CurrentPage;
@@ -82,6 +100,18 @@ extern RectangleStruct TriggerDebugDetailed;
 extern RectangleStruct TriggerDebugSort;
 extern RectangleStruct TriggerDebugSearch;
 extern RectangleStruct TriggerDebugEnableModified;
+
+#define AI_TRIGGER_RECT_COUNT 256
+
+extern bool bAITriggerDebug;
+extern int AITriggerDebugHoveredIndex;
+extern int AITriggerDebugPage;
+extern int AITriggerDebugSelectedHouse;
+extern int AITriggerDebugPageItemCount;
+extern RectangleStruct AITriggerDebugRect[AI_TRIGGER_RECT_COUNT];
+extern RectangleStruct AITriggerDebugPageUp;
+extern RectangleStruct AITriggerDebugPageDown;
+extern RectangleStruct AITriggerDebugHouseLeft;
 
 extern std::vector<TriggerClass*> SortedTriggerArray;
 extern std::vector<TriggerClassExt> DestroyedTriggers;
@@ -125,7 +155,8 @@ struct ComparableTrigger {
 	auto getLastExecuted() const {
 		return std::visit([](auto* obj) {
 			if constexpr (std::is_same_v<std::decay_t<decltype(*obj)>, TriggerClass*>) {
-				return TriggerExtMap[*obj].LastExecutedFrame;
+				auto it = TriggerExtMap.find(*obj);
+				return it != TriggerExtMap.end() ? it->second.LastExecutedFrame : -1;
 			}
 			else
 				return obj->LastExecutedFrame;
@@ -202,16 +233,17 @@ void GetEventCount(TEventClass* pEvent, int& count);
 void SortTriggerArray(TriggerSort sortType);
 const char* GetMissionName(int mID);
 void DrawTriggerDebug();
+void DrawAITriggerDebug();
+void HandleAITriggerDebugClick();
+void HandleAITriggerDebugNumpad();
 
 class TriggerInfoClass;
 
 void ProcessTriggers(TriggerClass* pTrigger);
 
-#ifdef _DEBUG
 class TriggerDebugClass;
 class TriggerDebugPageUpClass;
 class TriggerDebugPageDownClass;
-#endif
 
 class TriggerInfoClass : public CommandClass
 {
@@ -234,8 +266,6 @@ public:
 	}
 	virtual void Execute(WWKey eInput) const override;
 };
-
-#ifdef _DEBUG
 
 class TriggerDebugClass : public CommandClass
 {
@@ -303,7 +333,71 @@ public:
 	virtual void Execute(WWKey eInput) const override;
 };
 
-#endif // _DEBUG
+class AITriggerDebugClass : public CommandClass
+{
+public:
+	virtual const char* GetName() const override
+	{
+		return "AI Trigger Debug Mode";
+	}
+	virtual const wchar_t* GetUIName() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_AI_TRIGGER_DEBUG_MODE", L"AI Trigger Debug Mode");
+	}
+	virtual const wchar_t* GetUICategory() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_DEVELOPMENT", L"Development");
+	}
+	virtual const wchar_t* GetUIDescription() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_AI_TRIGGER_DEBUG_MODE_DESC", L"Display AI Trigger Types decision-making status for each house.");
+	}
+	virtual void Execute(WWKey eInput) const override;
+};
+
+class AITriggerDebugPageUpClass : public CommandClass
+{
+public:
+	virtual const char* GetName() const override
+	{
+		return "AI Trigger Debug Page Up";
+	}
+	virtual const wchar_t* GetUIName() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_AI_TRIGGER_DEBUG_PAGEUP", L"AI Trigger Debug Page Up");
+	}
+	virtual const wchar_t* GetUICategory() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_DEVELOPMENT", L"Development");
+	}
+	virtual const wchar_t* GetUIDescription() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_AI_TRIGGER_DEBUG_PAGEUP_DESC", L"AI Trigger Debug Page Up.");
+	}
+	virtual void Execute(WWKey eInput) const override;
+};
+
+class AITriggerDebugPageDownClass : public CommandClass
+{
+public:
+	virtual const char* GetName() const override
+	{
+		return "AI Trigger Debug Page Down";
+	}
+	virtual const wchar_t* GetUIName() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_AI_TRIGGER_DEBUG_PAGEDOWN", L"AI Trigger Debug Page Down");
+	}
+	virtual const wchar_t* GetUICategory() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_DEVELOPMENT", L"Development");
+	}
+	virtual const wchar_t* GetUIDescription() const override
+	{
+		return GeneralUtils::LoadStringUnlessMissing("TXT_AI_TRIGGER_DEBUG_PAGEDOWN_DESC", L"AI Trigger Debug Page Down.");
+	}
+	virtual void Execute(WWKey eInput) const override;
+};
 
 template<typename AppendFn, typename DisplayFn, typename ToolTipFn>
 void PrintCommonTechnoInfo(TechnoClass* pTechno, const std::string& name, bool allDisplay,

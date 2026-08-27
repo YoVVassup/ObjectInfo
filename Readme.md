@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.0.2.0-green" alt="Version"/>
+  <img src="https://img.shields.io/badge/Version-0.0.3.0-green" alt="Version"/>
   <img src="https://img.shields.io/badge/C%2B%2B-20-blue?logo=cplusplus" alt="C++20"/>
   <img src="https://img.shields.io/badge/Platform-Win32-blue?logo=windows" alt="Win32"/>
   <img src="https://img.shields.io/badge/YRpp-Phobos-green" alt="YRpp"/>
@@ -26,6 +26,7 @@ ObjectInfo is a Syringe DLL plugin that adds an interactive debug overlay for in
 
 - **Object Info Overlay** — hover over any unit/building to see detailed debug data
 - **Trigger Debug Mode** — interactive UI to inspect, enable, disable, and force-execute triggers
+- **AI Trigger Debug Mode** — inspect AI Trigger Types decision-making for each house
 - **Configurable Presets** — define which fields to display via INI config
 - **Trigger Dump** — export all trigger data to `debug.log`
 - **Version Info** — DLL includes embedded Windows VERSIONINFO resource
@@ -71,6 +72,22 @@ X=0
 Y=15
 ```
 
+### Panel Position
+
+Configure panel positions for Trigger Debug and AI Trigger Debug:
+
+```ini
+[TriggerDebugPosition]
+X=10
+Y=180
+
+[AITriggerDebugPosition]
+X=-420
+Y=180
+```
+
+Negative X values position from the right edge of the screen.
+
 ## Hotkeys
 
 Assign these in the game's keyboard options:
@@ -80,11 +97,14 @@ Assign these in the game's keyboard options:
 | **Display Object Info** | Toggle the object info overlay | Release + Debug |
 | **Next Info Preset** | Cycle through display presets | Release + Debug |
 | **Dump Trigger Info** | Export all trigger data to `debug.log` | Release + Debug |
-| **Trigger Debug Mode** | Toggle the interactive trigger debugger | Debug only |
-| **Trigger Debug Page Up** | Scroll up in the trigger list | Debug only |
-| **Trigger Debug Page Down** | Scroll down in the trigger list | Debug only |
+| **Trigger Debug Mode** | Toggle the interactive trigger debugger | Release + Debug |
+| **Trigger Debug Page Up** | Scroll up in the trigger list | Release + Debug |
+| **Trigger Debug Page Down** | Scroll down in the trigger list | Release + Debug |
+| **AI Trigger Debug Mode** | Toggle the AI Trigger Types decision-making panel | Release + Debug |
+| **AI Trigger Debug Page Up** | Scroll up in the AI trigger list | Release + Debug |
+| **AI Trigger Debug Page Down** | Scroll down in the AI trigger list | Release + Debug |
 
-> **Note:** Trigger Debug commands are only available in Debug builds (`_DEBUG`). This keeps the Release DLL clean for end users while providing full debugging tools for developers.
+> **Note:** All commands are available in both Release and Debug builds.
 
 ## Displayed Fields
 
@@ -149,12 +169,12 @@ Assign these in the game's keyboard options:
 
 ## Trigger Debug Mode
 
-Interactive UI for inspecting and controlling triggers in real-time. **Debug builds only.**
+Interactive UI for inspecting and controlling triggers in real-time.
 
 ### Display
 
 **Basic mode:**
-- Trigger ID and name (green = enabled, black = disabled)
+- Trigger ID and name
 
 **Detailed mode:**
 - `Frame Left(s): N(Ns)` — remaining time
@@ -166,11 +186,19 @@ Interactive UI for inspecting and controlling triggers in real-time. **Debug bui
 **Destroyed triggers:**
 - `<Expired> <ID> (<Name>)` with destruction timestamp
 
+### Color Indication
+
+| Color | Meaning |
+|-------|---------|
+| Green | Active trigger (enabled and executed at least once) |
+| Gray | Not yet activated (enabled but never executed) |
+| Red | Disabled trigger or expired trigger |
+
 ### UI Buttons
 
 | Button | Action |
 |--------|--------|
-| Page Up/Down | Navigate pages |
+| Page Up/Down | Navigate pages (wraps around) |
 | Details | Toggle detailed mode |
 | Sort | Cycle sort mode |
 | Search | Filter by ID/name (`!pattern!` to exclude) |
@@ -196,6 +224,64 @@ Interactive UI for inspecting and controlling triggers in real-time. **Debug bui
 | ByTimeLeft | Ascending by remaining time |
 | ByLastExecuted | Descending by last execution |
 | ByDestroyed | Descending by destruction time |
+
+## AI Trigger Debug Mode
+
+Interactive panel for inspecting AI Trigger Types decision-making for each house.
+
+### Display
+
+Shows all `AITriggerTypeClass` entries with:
+- **Status icon:** `+` (condition met), `o` (condition not met), `x` (disabled)
+- **ID** — trigger identifier
+- **Name** — trigger description (marquee scroll if too long)
+- **Condition** — readable condition with comparator and object (marquee scroll)
+- **Weight** — min/current/max weight (yellow if < 20% of max)
+- **TL** — tech level
+- **Team** — Team1/Team2
+
+### Color Indication
+
+| Color | Meaning |
+|-------|---------|
+| Green | Condition met for selected house |
+| Gray | Condition not met |
+| Red | Trigger disabled |
+| Yellow | Weight < 20% of maximum |
+
+### UI Controls
+
+| Button | Action |
+|--------|--------|
+| Page Up/Down | Navigate trigger pages (wraps around) |
+| House name | Cycle through AI houses or "All AI Houses" |
+| Click on status | Enable/disable the trigger |
+| Click on trigger | Show detailed info in message area |
+
+### Detailed Info (on click)
+
+Displays: condition type, all 4 comparators, owner filter, side, tech level, weight (min/current/max), teams, execution counts, difficulty flags, skirmish/global status.
+
+### Weight Adjustment
+
+| Key | Action |
+|-----|--------|
+| Numpad + | Increase weight by 1 |
+| Numpad - | Decrease weight by 1 |
+| Ctrl + Numpad +/- | Multiply step by 10 |
+| Shift + Numpad +/- | Divide step by 10 |
+
+### How it works
+
+The game periodically evaluates all `AITriggerTypeClass` entries for each AI house. Each trigger checks:
+1. Is it enabled?
+2. Does the difficulty match?
+3. Does the house/side filter match?
+4. Is the tech level sufficient?
+5. Is the weight > 0?
+6. Is the condition met?
+
+Triggers that pass are selected by weighted random. Weight = 5000 means "fire immediately".
 
 ## Hooks
 
@@ -247,6 +333,7 @@ ObjectInfo/
 ├── src/
 │   ├── ObjectInfo.cpp      # Main overlay, commands, INI loading
 │   ├── TriggerDebug.cpp    # Trigger debug UI, mouse hooks, event tracking
+│   ├── AITriggerDebug.cpp  # AI Trigger Types decision-making panel
 │   ├── Common.h            # Shared types, globals, utilities, templates
 │   ├── Rules.h             # Display config, CanDisplay logic
 │   ├── command.h           # MakeCommand template
