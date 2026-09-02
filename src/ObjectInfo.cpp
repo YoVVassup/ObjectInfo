@@ -8,9 +8,7 @@ bool bTriggerDebugDetailed = false;
 bool bTriggerDebugEdited = false;
 bool bTriggerDebugTimerEdited = false;
 
-char FinalStringBuffer[0x1000];
-wchar_t FinalStringBufferW[0x1000];
-wchar_t SearchPattern[0x200] = L"";
+std::wstring SearchPattern;
 
 const char* GetMissionName(int mID)
 {
@@ -152,7 +150,7 @@ DEFINE_HOOK(0x5FACDF, _Options_LoadFromINI, 5)
 	}
 
 	ObjectInfoDisplay::DisplayOffsetX = pINI->ReadInteger("ObjectInfoDisplayOffset", "X", 0);
-	ObjectInfoDisplay::DisplayOffsetY = pINI->ReadInteger("ObjectInfoDisplayOffset", "Y", 0);
+	ObjectInfoDisplay::DisplayOffsetY = pINI->ReadInteger("ObjectInfoDisplayOffset", "Y", 15);
 
 	TriggerDebugStartX = pINI->ReadInteger("TriggerDebugPosition", "X", TriggerDebugStartX);
 	TriggerDebugStartY = pINI->ReadInteger("TriggerDebugPosition", "Y", TriggerDebugStartY);
@@ -189,7 +187,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 					|| (position.Y < -SCREEN_EDGE_MARGIN || position.Y > DSurface::Composite->GetHeight() + SCREEN_EDGE_MARGIN))
 					draw = false;
 
-				char displayBuffer[0x800] = { 0 };
+				std::string displayBuffer;
 
 				auto DrawText = [&opposite, &draw](const wchar_t* string, int& offsetX, int& offsetY, int color) {
 					if (draw)
@@ -198,7 +196,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						auto w = DSurface::Composite->GetWidth();
 
 						auto wanted = GetTextDimensionsCompat(string);
-						wanted.Height = 14;
+						wanted.Height = TEXT_LINE_HEIGHT;
 
 						int exceedX = w - offsetX - wanted.Width;
 						if (exceedX >= 0)
@@ -252,7 +250,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 							rect.Y += wanted2.Height + 2;
 						}
 
-						wanted.Height = 14;
+						wanted.Height = TEXT_LINE_HEIGHT;
 
 						if (opposite)
 							offsetY -= wanted.Height;
@@ -268,22 +266,21 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						va_start(args, pFormat);
 						vsnprintf(buffer, sizeof(buffer), pFormat, args);
 						va_end(args);
-						strcat_s(displayBuffer, buffer);
+						displayBuffer += buffer;
 					};
 				auto display = [&displayBuffer, &DrawText, &offsetX, &offsetY]()
 					{
-						wchar_t bufferW[0x800] = { 0 };
-						mbstowcs(bufferW, displayBuffer, 0x7FF);
-						DrawText(bufferW, offsetX, offsetY, COLOR_WHITE);
+						auto wstr = A2W(displayBuffer.c_str());
+						DrawText(wstr.c_str(), offsetX, offsetY, COLOR_WHITE);
 
-						displayBuffer[0] = 0;
+						displayBuffer.clear();
 					};
 				auto displayToolTip = [&DrawToolTipText, &offsetX, &offsetY, &pTechno](const wchar_t* pFormat, ...)
 					{
 						wchar_t buffer[0x100] = { 0 };
 						va_list args;
 						va_start(args, pFormat);
-						vswprintf_s(buffer, 0x100, pFormat, args);
+						vswprintf_s(buffer, _countof(buffer), pFormat, args);
 						va_end(args);
 
 						if (pTechno->Owner)
@@ -298,10 +295,10 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 					{
 						auto pFoot = static_cast<FootClass*>(pTechno);
 
-						if (pFoot->BelongsToATeam())
+						if (pFoot->BelongsToATeam() && pFoot->Team && pFoot->Team->Type)
 						{
 							auto pTeam = pFoot->Team;
-							auto pTeamType = pFoot->Team->Type;
+							auto pTeamType = pTeam->Type;
 							if (ObjectInfoDisplay::CanDisplay("aitrigger", name) || allDisplay)
 							{
 								bool found = false;
@@ -333,6 +330,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 							{
 								if (pTeam->Type && pTeam->Type->TaskForce && pTeam->CurrentScript)
 								{
+									int missingAmounts[TASKFORCE_MAX_ENTRIES] = { 0 };
 									bool missingUnit = false;
 									for (int i = 0; i < TASKFORCE_MAX_ENTRIES; ++i)
 									{
@@ -357,6 +355,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 												}
 											}
 
+											missingAmounts[i] = missing;
 											if (missing > 0)
 											{
 												missingUnit = true;
@@ -377,31 +376,10 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 										append("Team Missing: %d", pTeam->CurrentScript->CurrentMission);
 										for (int i = 0; i < TASKFORCE_MAX_ENTRIES; ++i)
 										{
-											auto pEntry = pTeam->Type->TaskForce->Entries[i];
-											if (pEntry.Type && pEntry.Amount > 0)
+											if (missingAmounts[i] > 0)
 											{
-												int missing = pEntry.Amount;
-
-												for (auto pUnit = pTeam->FirstUnit; pUnit; pUnit = pUnit->NextTeamMember)
-												{
-													auto pUnitType = pUnit->GetTechnoType();
-
-													if (pUnitType
-														&& pUnit->IsAlive
-														&& pUnit->Health > 0
-														&& !pUnit->InLimbo)
-													{
-														if (pEntry.Type->ID == pUnitType->ID)
-														{
-															missing--;
-														}
-													}
-												}
-
-												if (missing > 0)
-												{
-													append("(%d, %s) ", missing, pEntry.Type->ID);
-												}
+												auto pEntry = pTeam->Type->TaskForce->Entries[i];
+												append("(%d, %s) ", missingAmounts[i], pEntry.Type->ID);
 											}
 										}
 									}
@@ -414,10 +392,19 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 							if (pFoot->Passengers.NumPassengers > 0)
 							{
 								FootClass* pCurrent = pFoot->Passengers.FirstPassenger;
-								append("%d Passengers: %s", pFoot->Passengers.NumPassengers, pCurrent->GetTechnoType()->ID);
-								for (pCurrent = abstract_cast<FootClass*>(pCurrent->NextObject); pCurrent; pCurrent = abstract_cast<FootClass*>(pCurrent->NextObject))
-									append(", %s", pCurrent->GetTechnoType()->ID);
-								display();
+								if (pCurrent)
+								{
+									auto pCurrentType = pCurrent->GetTechnoType();
+									if (pCurrentType)
+										append("%d Passengers: %s", pFoot->Passengers.NumPassengers, pCurrentType->ID);
+									for (pCurrent = abstract_cast<FootClass*>(pCurrent->NextObject); pCurrent; pCurrent = abstract_cast<FootClass*>(pCurrent->NextObject))
+									{
+										auto pNextType = pCurrent->GetTechnoType();
+										if (pNextType)
+											append(", %s", pNextType->ID);
+									}
+									display();
+								}
 							}
 						}
 						if (ObjectInfoDisplay::CanDisplay("destination", name) || allDisplay)
@@ -426,7 +413,9 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 
 							if (pDestination)
 							{
-								append("Destination = %s, Distance = %d, Location = (%d, %d)", pDestination->GetTechnoType()->ID, (pDestination->DistanceFrom(pFoot) / 256), pDestination->GetMapCoords().X, pDestination->GetMapCoords().Y);
+								auto pDestType = pDestination->GetTechnoType();
+								if (pDestType)
+									append("Destination = %s, Distance = %d, Location = (%d, %d)", pDestType->ID, (pDestination->DistanceFrom(pFoot) / 256), pDestination->GetMapCoords().X, pDestination->GetMapCoords().Y);
 								display();
 							}
 							else
@@ -445,7 +434,9 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 
 							if (pFocus)
 							{
-								append("Focus = %s, Distance = %d, Location = (%d, %d)", pFocus->GetTechnoType()->ID, (pFocus->DistanceFrom(pFoot) / 256), pFocus->GetMapCoords().X, pFocus->GetMapCoords().Y);
+								auto pFocusType = pFocus->GetTechnoType();
+								if (pFocusType)
+									append("Focus = %s, Distance = %d, Location = (%d, %d)", pFocusType->ID, (pFocus->DistanceFrom(pFoot) / 256), pFocus->GetMapCoords().X, pFocus->GetMapCoords().Y);
 								display();
 							}
 						}
@@ -551,7 +542,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 								auto pFactoryType = pBuilding->Factory->Object->GetTechnoType();
 								if (pFactoryType)
 								{
-									append("Production: %s (%d%%)", pFactoryType->ID, (pBuilding->Factory->GetProgress() * 100 / 54));
+									append("Production: %s (%d%%)", pFactoryType->ID, (pBuilding->Factory->GetProgress() * 100 / FACTORY_PROGRESS_MAX));
 									display();
 								}
 							}
@@ -565,12 +556,18 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						{
 							if (pBuilding->Occupants.Count > 0)
 							{
-								append("%d Occupants: %s", pBuilding->Occupants.Count, pBuilding->Occupants.GetItem(0)->Type->ID);
-								for (int i = 1; i < pBuilding->Occupants.Count; i++)
+								auto pFirst = pBuilding->Occupants.GetItem(0);
+								if (pFirst && pFirst->Type)
 								{
-									append(", %s", pBuilding->Occupants.GetItem(i)->Type->ID);
+									append("%d Occupants: %s", pBuilding->Occupants.Count, pFirst->Type->ID);
+									for (int i = 1; i < pBuilding->Occupants.Count; i++)
+									{
+										auto pOcc = pBuilding->Occupants.GetItem(i);
+										if (pOcc && pOcc->Type)
+											append(", %s", pOcc->Type->ID);
+									}
+									display();
 								}
-								display();
 							}
 						}
 						if (ObjectInfoDisplay::CanDisplay("enemy", name) || allDisplay)
@@ -583,11 +580,14 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 								if (pHouse->EnemyHouseIndex >= 0)
 								{
 									pEnemyHouse = HouseClass::Array.GetItem(pHouse->EnemyHouseIndex);
-									for (auto pNode : pHouse->AngerNodes)
+									if (pEnemyHouse)
 									{
-										if (pNode.House == pEnemyHouse)
+										for (auto pNode : pHouse->AngerNodes)
 										{
-											angerLevel = pNode.AngerLevel;
+											if (pNode.House == pEnemyHouse)
+											{
+												angerLevel = pNode.AngerLevel;
+											}
 										}
 									}
 								}
@@ -595,12 +595,13 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 								{
 									for (auto pNode : pHouse->AngerNodes)
 									{
-										if (!pNode.House->Type->MultiplayPassive
+										if (pNode.House
+											&& pNode.House->Type
+											&& !pNode.House->Type->MultiplayPassive
 											&& !pNode.House->Defeated
 											&& !pNode.House->IsObserver()
-											&& !pNode.House->IsAlliedWith(pHouse)
-											&& ((pNode.AngerLevel > angerLevel
-												)
+											&& !pHouse->IsAlliedWith(pNode.House)
+											&& ((pNode.AngerLevel > angerLevel)
 												|| angerLevel < 0))
 										{
 											angerLevel = pNode.AngerLevel;
@@ -663,5 +664,15 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 		DrawAITriggerDebug();
 	}
 
+	return 0;
+}
+
+DEFINE_HOOK(0x52D21F, InitRules_ForceDebugKeysEnabled, 6)
+{
+	CCINIClass* const pINI_RULES = CCINIClass::INI_Rules;
+	if (pINI_RULES)
+	{
+		pINI_RULES->WriteBool("GlobalControls", "DebugKeysEnabled", true);
+	}
 	return 0;
 }

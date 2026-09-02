@@ -1,3 +1,7 @@
+// ============================================================================
+// GeneralUtils.cpp - String utility implementations
+// ============================================================================
+
 #include "GeneralUtils.h"
 
 bool GeneralUtils::IsValidString(const char* str)

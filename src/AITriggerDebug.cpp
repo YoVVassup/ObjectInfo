@@ -12,9 +12,13 @@ RectangleStruct AITriggerDebugPageUp{0};
 RectangleStruct AITriggerDebugPageDown{0};
 RectangleStruct AITriggerDebugHouseLeft{0};
 
-int AITriggerDebugStartX = -420;
+int AITriggerDebugStartX = -780;
 int AITriggerDebugStartY = 180;
 static const int AITriggerDebugPerPage = 30;
+
+// Cached filtered triggers to avoid O(N) rescan on every click
+static std::vector<AITriggerTypeClass*> sFilteredTriggers;
+static int sFilteredHouseIndex = -2; // invalid sentinel to force initial rebuild
 
 // Column widths
 static const int COL_STATUS = 15;
@@ -42,6 +46,7 @@ void AITriggerDebugClass::Execute(WWKey eInput) const
 	{
 		AITriggerDebugPage = 0;
 		AITriggerDebugSelectedHouse = -1;
+		sFilteredHouseIndex = -2;
 		AITriggerDebugMarqueeOffset = 0;
 		AITriggerDebugMarqueeTimer = 0;
 	}
@@ -51,6 +56,7 @@ void AITriggerDebugPageUpClass::Execute(WWKey eInput) const
 {
 	if (bAITriggerDebug)
 	{
+		AITriggerDebugMarqueeOffset = 0;
 		if (AITriggerDebugPage > 0)
 			AITriggerDebugPage--;
 		else
@@ -69,6 +75,7 @@ void AITriggerDebugPageDownClass::Execute(WWKey eInput) const
 {
 	if (bAITriggerDebug)
 	{
+		AITriggerDebugMarqueeOffset = 0;
 		std::vector<HouseClass*> aiHouses;
 		GetAIHouses(aiHouses);
 		int total = GetTotalRelevantTriggers(aiHouses, AITriggerDebugSelectedHouse);
@@ -111,14 +118,12 @@ static const char* GetHouseTypeName(AITriggerHouseType type)
 
 static const char* GetSideName(int sideIndex)
 {
-	switch (sideIndex)
-	{
-	case 0:  return "All";
-	case 1:  return "Allied";
-	case 2:  return "Soviet";
-	case 3:  return "Yuri";
-	default: return "Unknown";
-	}
+	if (sideIndex == 0)
+		return "All";
+	int arrayIdx = sideIndex - 1;
+	if (arrayIdx >= 0 && arrayIdx < SideClass::Array.Count)
+		return SideClass::Array.GetItem(arrayIdx)->get_ID();
+	return "Unknown";
 }
 
 static const char* GetComparatorOperator(AITriggerConditionComparator cond)
@@ -223,7 +228,7 @@ static bool IsTriggerRelevantForHouse(AITriggerTypeClass* pTrigger, HouseClass* 
 	}
 	else if (pTrigger->OwnerHouseType == AITriggerHouseType::Any)
 	{
-		if (pTrigger->SideIndex != 0 && pHouse->SideIndex != pTrigger->SideIndex)
+		if (pTrigger->SideIndex != 0 && pTrigger->SideIndex - 1 != pHouse->Type->SideIndex)
 			return false;
 	}
 
@@ -247,9 +252,14 @@ static void GetAIHouses(std::vector<HouseClass*>& out)
 	}
 }
 
-static int GetTotalRelevantTriggers(const std::vector<HouseClass*>& aiHouses, int selectedHouse)
+static void RebuildFilteredCache(const std::vector<HouseClass*>& aiHouses, int selectedHouse)
 {
-	int count = 0;
+	if (selectedHouse == sFilteredHouseIndex)
+		return;
+
+	sFilteredTriggers.clear();
+	sFilteredHouseIndex = selectedHouse;
+
 	for (int i = 0; i < AITriggerTypeClass::Array.Count; i++)
 	{
 		auto pTrigger = AITriggerTypeClass::Array.GetItem(i);
@@ -276,64 +286,22 @@ static int GetTotalRelevantTriggers(const std::vector<HouseClass*>& aiHouses, in
 		}
 
 		if (relevant)
-			count++;
+			sFilteredTriggers.push_back(pTrigger);
 	}
-	return count;
+}
+
+static int GetTotalRelevantTriggers(const std::vector<HouseClass*>& aiHouses, int selectedHouse)
+{
+	RebuildFilteredCache(aiHouses, selectedHouse);
+	return (int)sFilteredTriggers.size();
 }
 
 static AITriggerTypeClass* GetAITriggerAtIndex(int hoveredIndex)
 {
-	if (hoveredIndex < 0)
+	if (hoveredIndex < 0 || hoveredIndex >= (int)sFilteredTriggers.size())
 		return nullptr;
 
-	int perPage = AITriggerDebugPerPage;
-	int realIdx = 0;
-	int skipped = 0;
-
-	std::vector<HouseClass*> aiHouses;
-	GetAIHouses(aiHouses);
-
-	for (int i = 0; i < AITriggerTypeClass::Array.Count; i++)
-	{
-		auto pTrigger = AITriggerTypeClass::Array.GetItem(i);
-		if (!pTrigger)
-			continue;
-
-		bool relevant = true;
-		if (AITriggerDebugSelectedHouse >= 0)
-		{
-			if (AITriggerDebugSelectedHouse < (int)aiHouses.size())
-				relevant = IsTriggerRelevantForHouse(pTrigger, aiHouses[AITriggerDebugSelectedHouse]);
-		}
-		else
-		{
-			relevant = false;
-			for (auto pHouse : aiHouses)
-			{
-				if (IsTriggerRelevantForHouse(pTrigger, pHouse))
-				{
-					relevant = true;
-					break;
-				}
-			}
-		}
-
-		if (!relevant)
-			continue;
-
-		if (skipped < AITriggerDebugPage * perPage)
-		{
-			skipped++;
-			continue;
-		}
-
-		if (realIdx == hoveredIndex)
-			return pTrigger;
-
-		realIdx++;
-	}
-
-	return nullptr;
+	return sFilteredTriggers[hoveredIndex];
 }
 
 static int DrawTextInColumn(const wchar_t* text, int x, int y, int maxWidth, int color, bool marquee = false)
@@ -439,7 +407,8 @@ void DrawAITriggerDebug()
 		if (AITriggerDebugSelectedHouse < (int)aiHouses.size())
 		{
 			auto pHouse = aiHouses[AITriggerDebugSelectedHouse];
-			houseNav = A2W(Format("< %s (%s) >", pHouse->get_ID(), pHouse->PlainName));
+			const char* sideName = GetSideName(pHouse->Type->SideIndex + 1);
+			houseNav = A2W(Format("< %s [%s] (%s) >", pHouse->get_ID(), sideName, pHouse->PlainName).c_str());
 		}
 		else
 		{
@@ -450,7 +419,7 @@ void DrawAITriggerDebug()
 
 	{
 		auto wanted = GetTextDimensionsCompat(houseNav.c_str());
-		wanted.Height = 14;
+		wanted.Height = TEXT_LINE_HEIGHT;
 		AITriggerDebugHouseLeft = { displayX, displayY, wanted.Width, wanted.Height };
 		DrawTextOutline(houseNav.c_str(), displayX, displayY, COLOR_WHITE);
 		displayY += wanted.Height;
@@ -458,18 +427,8 @@ void DrawAITriggerDebug()
 
 	// Page Up/Down
 	{
-		auto wanted = GetTextDimensionsCompat(L"Page Up");
-		wanted.Height = 14;
-		AITriggerDebugPageUp = { displayX, displayY, wanted.Width, wanted.Height };
-		DrawTextOutline(L"Page Up", displayX, displayY, COLOR_WHITE);
-
-		int upRight = displayX + wanted.Width + 10;
-		wanted = GetTextDimensionsCompat(L"Page Down");
-		wanted.Height = 14;
-		AITriggerDebugPageDown = { upRight, displayY, wanted.Width, wanted.Height };
-		DrawTextOutline(L"Page Down", upRight, displayY, COLOR_WHITE);
-
-		upRight += wanted.Width + 10;
+		int upRight = DrawTextButton(L"Page Up", displayX, displayY, COLOR_WHITE, AITriggerDebugPageUp);
+		upRight = DrawTextButton(L"Page Down", upRight + 10, displayY, COLOR_WHITE, AITriggerDebugPageDown);
 
 		// Page indicator
 		int totalPages = (GetTotalRelevantTriggers(aiHouses, AITriggerDebugSelectedHouse) + perPage - 1) / perPage;
@@ -479,65 +438,43 @@ void DrawAITriggerDebug()
 			AITriggerDebugPage = maxPage;
 		if (AITriggerDebugPage < 0)
 			AITriggerDebugPage = 0;
-		std::wstring pageInfo = A2W(Format("Page %d/%d", AITriggerDebugPage + 1, totalPages));
-		wanted = GetTextDimensionsCompat(pageInfo.c_str());
-		wanted.Height = 14;
-		DrawTextOutline(pageInfo.c_str(), upRight, displayY, RGB8882RGB565(150, 150, 150));
+		std::wstring pageInfo = A2W(Format("Page %d/%d", AITriggerDebugPage + 1, totalPages).c_str());
+		DrawTextOutline(pageInfo.c_str(), upRight + 10, displayY, COLOR_PAGE_INFO);
 
-		displayY += wanted.Height;
+		displayY += TEXT_LINE_HEIGHT;
 	}
 
 	// Column header
 	{
-		int colX = displayX;
-		DrawTextOutline(L"St", colX + 2, displayY, RGB8882RGB565(100, 100, 100));
-		colX += COL_STATUS;
-		DrawTextOutline(L"ID", colX + 2, displayY, RGB8882RGB565(100, 100, 100));
-		colX += COL_ID;
-		DrawTextOutline(L"Name", colX + 2, displayY, RGB8882RGB565(100, 100, 100));
-		colX += COL_NAME;
-		DrawTextOutline(L"Condition", colX + 2, displayY, RGB8882RGB565(100, 100, 100));
-		colX += COL_CONDITION;
-		DrawTextOutline(L"Weight", colX + 2, displayY, RGB8882RGB565(100, 100, 100));
-		colX += COL_WEIGHT;
-		DrawTextOutline(L"TL", colX + 2, displayY, RGB8882RGB565(100, 100, 100));
-		colX += COL_TL;
-		DrawTextOutline(L"Team", colX + 2, displayY, RGB8882RGB565(100, 100, 100));
+		struct ColumnDef { const wchar_t* name; int width; };
+		static const ColumnDef columns[] = {
+			{ L"St", COL_STATUS },
+			{ L"ID", COL_ID },
+			{ L"Name", COL_NAME },
+			{ L"Condition", COL_CONDITION },
+			{ L"Weight", COL_WEIGHT },
+			{ L"TL", COL_TL },
+			{ L"Team", COL_TEAM },
+		};
 
-		displayY += 14;
+		int colX = displayX;
+		for (const auto& col : columns)
+		{
+			DrawTextOutline(col.name, colX + 2, displayY, COLOR_HEADER_DIM);
+			colX += col.width;
+		}
+
+		displayY += TEXT_LINE_HEIGHT;
 	}
 
-	// Collect and filter triggers
+	// Use cached filtered triggers
+	RebuildFilteredCache(aiHouses, AITriggerDebugSelectedHouse);
 	int row = 0;
 	int skipped = 0;
 
-	for (int i = 0; i < AITriggerTypeClass::Array.Count; i++)
+	for (int i = 0; i < (int)sFilteredTriggers.size(); i++)
 	{
-		auto pTrigger = AITriggerTypeClass::Array.GetItem(i);
-		if (!pTrigger)
-			continue;
-
-		bool relevant = true;
-		if (AITriggerDebugSelectedHouse >= 0)
-		{
-			if (AITriggerDebugSelectedHouse < (int)aiHouses.size())
-				relevant = IsTriggerRelevantForHouse(pTrigger, aiHouses[AITriggerDebugSelectedHouse]);
-		}
-		else
-		{
-			relevant = false;
-			for (auto pHouse : aiHouses)
-			{
-				if (IsTriggerRelevantForHouse(pTrigger, pHouse))
-				{
-					relevant = true;
-					break;
-				}
-			}
-		}
-
-		if (!relevant)
-			continue;
+		auto pTrigger = sFilteredTriggers[i];
 
 		if (skipped < AITriggerDebugPage * perPage)
 		{
@@ -549,7 +486,7 @@ void DrawAITriggerDebug()
 			continue;
 
 		auto h = DSurface::Composite->GetHeight();
-		if (displayY + 14 >= h - BOTTOM_MARGIN)
+		if (displayY + TEXT_LINE_HEIGHT >= h - BOTTOM_MARGIN)
 			break;
 
 		bool conditionMetAny = false;
@@ -574,25 +511,25 @@ void DrawAITriggerDebug()
 		const char* statusIcon;
 		if (!pTrigger->IsEnabled)
 		{
-			color = RGB8882RGB565(200, 60, 60);
+			color = COLOR_TRIGGER_DESTROYED;
 			statusIcon = "x";
 		}
 		else if (conditionMetAny)
 		{
-			color = RGB8882RGB565(0, 180, 0);
+			color = COLOR_TRIGGER_ENABLED;
 			statusIcon = "+";
 		}
 		else
 		{
-			color = RGB8882RGB565(140, 140, 140);
+			color = COLOR_TRIGGER_DISABLED;
 			statusIcon = "o";
 		}
 
 		if (pTrigger->IsEnabled && pTrigger->Weight_Maximum > 0)
 		{
 			double ratio = pTrigger->Weight_Current / pTrigger->Weight_Maximum;
-			if (ratio < 0.2 && ratio >= 0.0)
-				color = RGB8882RGB565(200, 200, 60);
+			if (ratio < AI_TRIGGER_LOW_WEIGHT_RATIO && ratio >= 0.0)
+				color = COLOR_TRIGGER_LOW_WEIGHT;
 		}
 
 		// Row rectangle (for click detection, no background)
@@ -636,15 +573,15 @@ void DrawAITriggerDebug()
 
 		// Weight: min/current/max
 		std::wstring weightStr;
-		if (pTrigger->Weight_Current >= 5000.0)
-			weightStr = A2W(Format("%.0f MAX!", pTrigger->Weight_Current));
+		if (pTrigger->Weight_Current >= AI_TRIGGER_FIRE_IMMEDIATELY_WEIGHT)
+			weightStr = A2W(Format("%.0f MAX!", pTrigger->Weight_Current).c_str());
 		else
-			weightStr = A2W(Format("%.0f/%.0f/%.0f", pTrigger->Weight_Minimum, pTrigger->Weight_Current, pTrigger->Weight_Maximum));
+			weightStr = A2W(Format("%.0f/%.0f/%.0f", pTrigger->Weight_Minimum, pTrigger->Weight_Current, pTrigger->Weight_Maximum).c_str());
 		DrawTextOutline(weightStr.c_str(), colX + 2, displayY, color);
 		colX += COL_WEIGHT;
 
 		// TechLevel
-		std::wstring tlStr = A2W(Format("%d", pTrigger->TechLevel));
+		std::wstring tlStr = A2W(Format("%d", pTrigger->TechLevel).c_str());
 		DrawTextOutline(tlStr.c_str(), colX + 2, displayY, color);
 		colX += COL_TL;
 
@@ -654,7 +591,7 @@ void DrawAITriggerDebug()
 		std::wstring teamStr = t1 + L"/" + t2;
 		DrawTextInColumn(teamStr.c_str(), colX + 2, displayY, COL_TEAM - 4, color);
 
-		displayY += 14;
+		displayY += TEXT_LINE_HEIGHT;
 		row++;
 	}
 
@@ -701,7 +638,7 @@ void HandleAITriggerDebugClick()
 			detail += Format("Side: %s (%d), TechLevel: %d\n", GetSideName(pTrigger->SideIndex), pTrigger->SideIndex, pTrigger->TechLevel);
 			detail += Format("Weight: %.0f / %.0f / %.0f%s\n",
 				pTrigger->Weight_Minimum, pTrigger->Weight_Current, pTrigger->Weight_Maximum,
-				pTrigger->Weight_Current >= 5000.0 ? " [OVERRIDE - FIRE IMMEDIATELY]" : "");
+				pTrigger->Weight_Current >= AI_TRIGGER_FIRE_IMMEDIATELY_WEIGHT ? " [OVERRIDE - FIRE IMMEDIATELY]" : "");
 			if (pTrigger->Team1)
 				detail += Format("Team1: %s", pTrigger->Team1->get_ID());
 			if (pTrigger->Team2)
@@ -736,7 +673,9 @@ void HandleAITriggerDebugClick()
 				AITriggerDebugSelectedHouse++;
 				if (AITriggerDebugSelectedHouse >= (int)aiHouses.size())
 					AITriggerDebugSelectedHouse = -1;
+				sFilteredHouseIndex = -2;
 				AITriggerDebugPage = 0;
+				AITriggerDebugMarqueeOffset = 0;
 			}
 			break;
 		}

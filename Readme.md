@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.0.3.0-green" alt="Version"/>
+  <img src="https://img.shields.io/badge/Version-0.0.4.0-green" alt="Version"/>
   <img src="https://img.shields.io/badge/C%2B%2B-20-blue?logo=cplusplus" alt="C++20"/>
   <img src="https://img.shields.io/badge/Platform-Win32-blue?logo=windows" alt="Win32"/>
   <img src="https://img.shields.io/badge/YRpp-Phobos-green" alt="YRpp"/>
@@ -86,7 +86,7 @@ X=-420
 Y=180
 ```
 
-Negative X values position from the right edge of the screen.
+Negative X values position from the right edge of the screen. Negative Y values position from the bottom edge of the screen.
 
 ## Hotkeys
 
@@ -223,7 +223,7 @@ Interactive UI for inspecting and controlling triggers in real-time.
 | ByName | Ascending alphabetical |
 | ByTimeLeft | Ascending by remaining time |
 | ByLastExecuted | Descending by last execution |
-| ByDestroyed | Descending by destruction time |
+| ByDestroyed | Ascending by destruction time |
 
 ## AI Trigger Debug Mode
 
@@ -254,7 +254,7 @@ Shows all `AITriggerTypeClass` entries with:
 | Button | Action |
 |--------|--------|
 | Page Up/Down | Navigate trigger pages (wraps around) |
-| House name | Cycle through AI houses or "All AI Houses" |
+| House name | Cycle through AI houses or "All AI Houses" — shows side name for each house |
 | Click on status | Enable/disable the trigger |
 | Click on trigger | Show detailed info in message area |
 
@@ -289,16 +289,20 @@ Triggers that pass are selected by weighted random. Weight = 5000 means "fire im
 |---------|---------|
 | `0x533066` | Command registration |
 | `0x4F4583` | Overlay rendering |
-| `0x69300B` | Mouse hover tracking |
-| `0x6931A5` | Mouse click handling |
-| `0x693268` | Button state reset |
-| `0x692F85` | Long-press prevention |
-| `0x6851F0` | Logic initialization |
-| `0x7265D1` | Trigger execution recording |
-| `0x7264C0` | Event clearing |
-| `0x726564` | Condition recording |
-| `0x726720` | Trigger destruction |
+| `0x52D21F` | Force debug keys enabled in rules initialization |
 | `0x5FACDF` | INI config loading |
+| `0x6851F0` | Logic initialization |
+| `0x692F85` | Scroll class — long-press prevention |
+| `0x69300B` | Scroll class — mouse update, skips game-side processing when Trigger Debug active |
+| `0x6931A5` | Scroll class — handles mouse click events for Trigger Debug UI buttons and entries |
+| `0x693268` | Scroll class — release left mouse button handling |
+| `0x7264C0` | Trigger event clearing |
+| `0x726564` | Trigger condition recording |
+| `0x7265D1` | Trigger execution recording |
+| `0x726720` | Trigger destruction |
+| `0x49F5C0` | Copy protection — launcher check bypass (debug only) |
+| `0x49F620` | Copy protection — notify launcher bypass (debug only) |
+| `0x49F7A0` | Copy protection — protected data check bypass (debug only) |
 
 ## Known Conflicts
 
@@ -360,6 +364,10 @@ ObjectInfo/
 | [Everything-Compatible/YRDict](https://github.com/Everything-Compatible/YRDict) | Dictionary of YR engine reversing data |
 | [SethGekco/YR-Hook-Encyclopedia](https://github.com/SethGekco/YR-Hook-Encyclopedia) | Framework-neutral hook address registry |
 | [ModEnc](https://modenc.renegadeprojects.com) | Wiki encyclopedia of INI tags and flags |
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 ## Credits
 
