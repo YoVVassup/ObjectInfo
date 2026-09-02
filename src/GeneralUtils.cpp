@@ -21,5 +21,6 @@ const wchar_t* GeneralUtils::LoadStringOrDefault(const char* key, const wchar_t*
 
 const wchar_t* GeneralUtils::LoadStringUnlessMissing(const char* key, const wchar_t* defaultValue)
 {
-	return wcsstr(LoadStringOrDefault(key, defaultValue), L"MISSING:") ? defaultValue : LoadStringOrDefault(key, defaultValue);
+	const wchar_t* result = LoadStringOrDefault(key, defaultValue);
+	return wcsstr(result, L"MISSING:") ? defaultValue : result;
 }

@@ -408,7 +408,11 @@ void DrawAITriggerDebug()
 		{
 			auto pHouse = aiHouses[AITriggerDebugSelectedHouse];
 			const char* sideName = GetSideName(pHouse->Type->SideIndex + 1);
-			houseNav = A2W(Format("< %s [%s] (%s) >", pHouse->get_ID(), sideName, pHouse->PlainName).c_str());
+			const char* parentName = pHouse->Type->ParentCountry;
+			if (parentName && strcmp(parentName, pHouse->get_ID()) != 0)
+				houseNav = A2W(Format("< %s [%s] (%s) -> %s >", pHouse->get_ID(), sideName, pHouse->PlainName, parentName).c_str());
+			else
+				houseNav = A2W(Format("< %s [%s] (%s) >", pHouse->get_ID(), sideName, pHouse->PlainName).c_str());
 		}
 		else
 		{

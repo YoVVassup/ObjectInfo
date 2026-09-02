@@ -166,6 +166,9 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 {
 	if (bObjectInfo)
 	{
+		const int surfH = DSurface::Composite->GetHeight();
+		const int surfW = DSurface::Composite->GetWidth();
+
 		for (auto pTechno : TechnoClass::Array)
 		{
 			if (pTechno->IsMouseHovering || pTechno->IsSelected)
@@ -178,27 +181,24 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 				bool opposite = false;
 				bool draw = true;
 
-				if (DSurface::Composite->GetHeight() - position.Y < SCREEN_BOTTOM_THRESHOLD)
+				if (surfH - position.Y < SCREEN_BOTTOM_THRESHOLD)
 				{
 					opposite = true;
 					offsetY = position.Y - 30;
 				}
-				if ((position.X < -SCREEN_EDGE_MARGIN || position.X > DSurface::Composite->GetWidth() + SCREEN_EDGE_MARGIN)
-					|| (position.Y < -SCREEN_EDGE_MARGIN || position.Y > DSurface::Composite->GetHeight() + SCREEN_EDGE_MARGIN))
+				if ((position.X < -SCREEN_EDGE_MARGIN || position.X > surfW + SCREEN_EDGE_MARGIN)
+					|| (position.Y < -SCREEN_EDGE_MARGIN || position.Y > surfH + SCREEN_EDGE_MARGIN))
 					draw = false;
 
 				std::string displayBuffer;
 
-				auto DrawText = [&opposite, &draw](const wchar_t* string, int& offsetX, int& offsetY, int color) {
+				auto DrawText = [&opposite, &draw, surfH, surfW](const wchar_t* string, int& offsetX, int& offsetY, int color) {
 					if (draw)
 					{
-						auto h = DSurface::Composite->GetHeight();
-						auto w = DSurface::Composite->GetWidth();
-
 						auto wanted = GetTextDimensionsCompat(string);
 						wanted.Height = TEXT_LINE_HEIGHT;
 
-						int exceedX = w - offsetX - wanted.Width;
+						int exceedX = surfW - offsetX - wanted.Width;
 						if (exceedX >= 0)
 							exceedX = 0;
 
@@ -212,7 +212,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 							offsetY += wanted.Height;
 					}
 					};
-				auto DrawToolTipText = [&opposite, &draw](const wchar_t* string, int& offsetX, int& offsetY, int color) {
+				auto DrawToolTipText = [&opposite, &draw, surfH, surfW](const wchar_t* string, int& offsetX, int& offsetY, int color) {
 					if (draw)
 					{
 						std::vector<std::wstring> lines;
@@ -225,8 +225,6 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 						}
 						lines.push_back(input);
 
-						auto h = DSurface::Composite->GetHeight();
-						auto w = DSurface::Composite->GetWidth();
 						RectangleStruct wanted = { 0, 0, 0, 0 };
 
 						for (const auto& line : lines)
@@ -237,7 +235,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 								wanted.Width = wanted2.Width;
 						}
 
-						int exceedX = w - offsetX - wanted.Width;
+						int exceedX = surfW - offsetX - wanted.Width;
 						if (exceedX >= 0)
 							exceedX = 0;
 
@@ -261,7 +259,7 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 
 				auto append = [&displayBuffer](const char* pFormat, ...)
 					{
-						char buffer[0x100];
+						char buffer[APPEND_BUFFER_SIZE];
 						va_list args;
 						va_start(args, pFormat);
 						vsnprintf(buffer, sizeof(buffer), pFormat, args);
@@ -293,7 +291,8 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 
 				auto footFields = [&append, &display](TechnoClass* pTechno, const std::string& name, bool allDisplay)
 					{
-						auto pFoot = static_cast<FootClass*>(pTechno);
+						auto pFoot = abstract_cast<FootClass*>(pTechno);
+						if (!pFoot) return;
 
 						if (pFoot->BelongsToATeam() && pFoot->Team && pFoot->Team->Type)
 						{
@@ -518,7 +517,8 @@ DEFINE_HOOK(0x4F4583, GScreenClass_DrawOnTop_TheDarkSideOfTheMoon, 6)
 
 				auto buildingFields = [&append, &display](TechnoClass* pTechno, const std::string& name, bool allDisplay)
 					{
-						auto pBuilding = static_cast<BuildingClass*>(pTechno);
+						auto pBuilding = abstract_cast<BuildingClass*>(pTechno);
+						if (!pBuilding) return;
 						auto pType = pBuilding->GetTechnoType();
 
 						if (ObjectInfoDisplay::CanDisplay("power", name) || allDisplay)

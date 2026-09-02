@@ -23,6 +23,7 @@
 #include <vector>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 
 // ============================================================================
 // Drawing Utilities
@@ -53,6 +54,7 @@ inline void DrawTextOutline(const wchar_t* text, int x, int y, int color)
 #define SCREEN_BOTTOM_THRESHOLD 150 // Min distance from bottom to flip overlay upward
 #define TEXT_LINE_HEIGHT 14         // Pixel height of one text line
 #define OUTLINE_RADIUS 2            // Outline thickness for DrawTextOutline
+#define APPEND_BUFFER_SIZE 0x400    // 1024 bytes for append format buffer
 
 // ============================================================================
 // Color Constants (RGB565 format for game surface)

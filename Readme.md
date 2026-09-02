@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.0.4.0-green" alt="Version"/>
+  <img src="https://img.shields.io/badge/Version-0.0.4.1-green" alt="Version"/>
   <img src="https://img.shields.io/badge/C%2B%2B-20-blue?logo=cplusplus" alt="C++20"/>
   <img src="https://img.shields.io/badge/Platform-Win32-blue?logo=windows" alt="Win32"/>
   <img src="https://img.shields.io/badge/YRpp-Phobos-green" alt="YRpp"/>
@@ -82,7 +82,7 @@ X=10
 Y=180
 
 [AITriggerDebugPosition]
-X=-420
+X=-780
 Y=180
 ```
 
@@ -254,7 +254,7 @@ Shows all `AITriggerTypeClass` entries with:
 | Button | Action |
 |--------|--------|
 | Page Up/Down | Navigate trigger pages (wraps around) |
-| House name | Cycle through AI houses or "All AI Houses" — shows side name for each house |
+| House name | Cycle through AI houses or "All AI Houses" — shows side name and parent country for each house |
 | Click on status | Enable/disable the trigger |
 | Click on trigger | Show detailed info in message area |
 
